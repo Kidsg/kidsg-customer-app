@@ -63,3 +63,33 @@ data class CheckoutCreateResponseDto(
     val paymentMethod: String,
     val order: OrderDto? = null
 )
+
+@Serializable
+data class AddToCartRequestDto(
+    val productId: String,
+    val quantity: Int = 1,
+    val selectedVariant: String? = null
+)
+
+@Serializable
+data class UpdateCartItemRequestDto(
+    val quantity: Int
+)
+
+@Serializable
+data class ValidateCouponRequestDto(
+    val code: String
+)
+
+@Serializable
+data class CheckoutPreviewRequestDto(
+    val couponCode: String? = null
+)
+
+@Serializable
+data class CheckoutCreateRequestDto(
+    val addressId: String,
+    val paymentMethod: String = "UPI",
+    val couponCode: String? = null
+)
+

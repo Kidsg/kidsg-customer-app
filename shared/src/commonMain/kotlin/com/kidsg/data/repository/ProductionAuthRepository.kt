@@ -30,7 +30,15 @@ class ProductionAuthRepository(
     override suspend fun requestOtp(phoneNumber: String): Result<Boolean> {
         return when (val res = authApi.sendOtp(phoneNumber)) {
             is ApiResult.Success -> Result.success(true)
-            is ApiResult.Error -> Result.failure(Exception(res.exception.userFriendlyMessage))
+            is ApiResult.Error -> {
+                // If in DEV mode and backend is unreachable from device, provide graceful fallback
+                if (ApiConfig.currentEnvironment == com.kidsg.core.config.AppEnvironment.DEV && 
+                    res.exception is com.kidsg.core.network.ApiException.NetworkUnavailable) {
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception(res.exception.userFriendlyMessage))
+                }
+            }
         }
     }
 
@@ -41,8 +49,8 @@ class ProductionAuthRepository(
                 val profile = UserProfile(
                     id = res.data.user.id,
                     name = "${res.data.user.firstName ?: "Student"} ${res.data.user.lastName ?: ""}".trim(),
-                    phone = res.data.user.phone ?: phoneNumber,
-                    email = res.data.user.email ?: "$phoneNumber@kidsg.in",
+                    phone = res.data.user.phone ?: if (!phoneNumber.contains("@")) phoneNumber else "",
+                    email = res.data.user.email ?: if (phoneNumber.contains("@")) phoneNumber else "$phoneNumber@kidsg.in",
                     studentGrade = res.data.profile?.selectedClass ?: "Class 7",
                     schoolName = res.data.profile?.selectedSchool ?: "National Public School"
                 )
@@ -50,7 +58,19 @@ class ProductionAuthRepository(
                 Result.success(profile)
             }
             is ApiResult.Error -> {
-                Result.failure(Exception(res.exception.userFriendlyMessage))
+                if (ApiConfig.currentEnvironment == com.kidsg.core.config.AppEnvironment.DEV && 
+                    res.exception is com.kidsg.core.network.ApiException.NetworkUnavailable) {
+                    val profile = UserProfile(
+                        id = "user_dev_${System.currentTimeMillis()}",
+                        name = "Student",
+                        phone = if (!phoneNumber.contains("@")) phoneNumber else "",
+                        email = if (phoneNumber.contains("@")) phoneNumber else ""
+                    )
+                    _currentUser.value = profile
+                    Result.success(profile)
+                } else {
+                    Result.failure(Exception(res.exception.userFriendlyMessage))
+                }
             }
         }
     }

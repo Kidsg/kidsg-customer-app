@@ -9,17 +9,61 @@ import com.kidsg.data.remote.dto.*
 import io.ktor.client.call.body
 import io.ktor.client.request.*
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import io.ktor.http.contentType
+
+suspend inline fun <reified T, reified B : Any> safeApiCallWithBody(
+    method: HttpMethod,
+    path: String,
+    bodyData: B,
+    params: Map<String, String>? = null
+): ApiResult<T> {
+    return try {
+        val client = ApiClient.httpClient
+        val url = "${ApiConfig.baseUrl}$path"
+
+        val response: HttpResponse = client.request(url) {
+            this.method = method
+            contentType(ContentType.Application.Json)
+            params?.forEach { (k, v) -> parameter(k, v) }
+            setBody(bodyData)
+        }
+
+        if (response.status == HttpStatusCode.Unauthorized) {
+            return ApiResult.Error(ApiException.Unauthorized())
+        }
+        if (response.status == HttpStatusCode.Forbidden) {
+            return ApiResult.Error(ApiException.Forbidden())
+        }
+        if (response.status == HttpStatusCode.NotFound) {
+            return ApiResult.Error(ApiException.NotFound())
+        }
+
+        val apiResponse: ApiResponseDto<T> = response.body()
+        if (apiResponse.success && apiResponse.data != null) {
+            ApiResult.Success(apiResponse.data, apiResponse.message)
+        } else {
+            ApiResult.Error(
+                ApiException.ValidationError(
+                    message = apiResponse.message ?: "Request was not successful",
+                    errorCode = apiResponse.errorCode
+                )
+            )
+        }
+    } catch (e: io.ktor.client.network.sockets.ConnectTimeoutException) {
+        ApiResult.Error(ApiException.Timeout("Connection timed out", cause = e))
+    } catch (e: io.ktor.client.plugins.HttpRequestTimeoutException) {
+        ApiResult.Error(ApiException.Timeout("Request timed out", cause = e))
+    } catch (e: Exception) {
+        ApiResult.Error(ApiException.NetworkUnavailable(e.message ?: "Network error", cause = e))
+    }
+}
 
 suspend inline fun <reified T> safeApiCall(
     method: HttpMethod,
     path: String,
-    bodyData: Any? = null,
     params: Map<String, String>? = null
 ): ApiResult<T> {
     return try {
@@ -29,9 +73,6 @@ suspend inline fun <reified T> safeApiCall(
         val response: HttpResponse = client.request(url) {
             this.method = method
             params?.forEach { (k, v) -> parameter(k, v) }
-            if (bodyData != null) {
-                setBody(bodyData)
-            }
         }
 
         if (response.status == HttpStatusCode.Unauthorized) {
@@ -93,17 +134,19 @@ class CartApi {
         safeApiCall(HttpMethod.Get, Endpoints.CART)
 
     suspend fun addToCart(productId: String, quantity: Int = 1, variant: String? = null): ApiResult<CartResponseDto> {
-        val body = buildJsonObject {
-            put("productId", productId)
-            put("quantity", quantity)
-            if (variant != null) put("selectedVariant", variant)
-        }
-        return safeApiCall(HttpMethod.Post, Endpoints.CART_ITEMS, bodyData = body)
+        return safeApiCallWithBody(
+            HttpMethod.Post,
+            Endpoints.CART_ITEMS,
+            bodyData = AddToCartRequestDto(productId, quantity, variant)
+        )
     }
 
     suspend fun updateCartItem(cartItemId: String, quantity: Int): ApiResult<CartResponseDto> {
-        val body = buildJsonObject { put("quantity", quantity) }
-        return safeApiCall(HttpMethod.Patch, "${Endpoints.CART_ITEMS}/$cartItemId", bodyData = body)
+        return safeApiCallWithBody(
+            HttpMethod.Patch,
+            "${Endpoints.CART_ITEMS}/$cartItemId",
+            bodyData = UpdateCartItemRequestDto(quantity)
+        )
     }
 
     suspend fun removeFromCart(cartItemId: String): ApiResult<CartResponseDto> =
@@ -113,8 +156,11 @@ class CartApi {
         safeApiCall(HttpMethod.Delete, Endpoints.CART)
 
     suspend fun validateCoupon(code: String): ApiResult<CouponValidationResponseDto> {
-        val body = buildJsonObject { put("code", code) }
-        return safeApiCall(HttpMethod.Post, Endpoints.COUPONS_VALIDATE, bodyData = body)
+        return safeApiCallWithBody(
+            HttpMethod.Post,
+            Endpoints.COUPONS_VALIDATE,
+            bodyData = ValidateCouponRequestDto(code)
+        )
     }
 
     suspend fun getAvailableCoupons(): ApiResult<List<CouponDto>> =
@@ -123,19 +169,19 @@ class CartApi {
 
 class CheckoutApi {
     suspend fun preview(couponCode: String? = null): ApiResult<CheckoutPreviewDto> {
-        val body = buildJsonObject {
-            if (couponCode != null) put("couponCode", couponCode)
-        }
-        return safeApiCall(HttpMethod.Post, Endpoints.CHECKOUT_PREVIEW, bodyData = body)
+        return safeApiCallWithBody(
+            HttpMethod.Post,
+            Endpoints.CHECKOUT_PREVIEW,
+            bodyData = CheckoutPreviewRequestDto(couponCode)
+        )
     }
 
     suspend fun createOrder(addressId: String, couponCode: String? = null, paymentMethod: String = "UPI"): ApiResult<CheckoutCreateResponseDto> {
-        val body = buildJsonObject {
-            put("addressId", addressId)
-            put("paymentMethod", paymentMethod)
-            if (couponCode != null) put("couponCode", couponCode)
-        }
-        return safeApiCall(HttpMethod.Post, Endpoints.CHECKOUT_CREATE, bodyData = body)
+        return safeApiCallWithBody(
+            HttpMethod.Post,
+            Endpoints.CHECKOUT_CREATE,
+            bodyData = CheckoutCreateRequestDto(addressId, paymentMethod, couponCode)
+        )
     }
 }
 
@@ -154,17 +200,24 @@ class OrderApi {
 }
 
 class AuthApi {
-    suspend fun sendOtp(phone: String): ApiResult<SendOtpResponseDto> {
-        val body = buildJsonObject { put("phone", phone) }
-        return safeApiCall(HttpMethod.Post, Endpoints.AUTH_SEND_OTP, bodyData = body)
+    suspend fun sendOtp(contact: String): ApiResult<SendOtpResponseDto> {
+        val trimmed = contact.trim()
+        val request = if (trimmed.contains("@")) {
+            SendOtpRequestDto(email = trimmed)
+        } else {
+            SendOtpRequestDto(phone = trimmed)
+        }
+        return safeApiCallWithBody(HttpMethod.Post, Endpoints.AUTH_SEND_OTP, bodyData = request)
     }
 
-    suspend fun verifyOtp(phone: String, otp: String): ApiResult<VerifyOtpResponseDto> {
-        val body = buildJsonObject {
-            put("phone", phone)
-            put("otp", otp)
+    suspend fun verifyOtp(contact: String, otp: String): ApiResult<VerifyOtpResponseDto> {
+        val trimmed = contact.trim()
+        val request = if (trimmed.contains("@")) {
+            VerifyOtpRequestDto(email = trimmed, otp = otp.trim())
+        } else {
+            VerifyOtpRequestDto(phone = trimmed, otp = otp.trim())
         }
-        return safeApiCall(HttpMethod.Post, Endpoints.AUTH_VERIFY_OTP, bodyData = body)
+        return safeApiCallWithBody(HttpMethod.Post, Endpoints.AUTH_VERIFY_OTP, bodyData = request)
     }
 
     suspend fun getMe(): ApiResult<MeResponseDto> =
@@ -176,5 +229,5 @@ class AddressApi {
         safeApiCall(HttpMethod.Get, Endpoints.ADDRESSES)
 
     suspend fun addAddress(address: AddressDto): ApiResult<AddressDto> =
-        safeApiCall(HttpMethod.Post, Endpoints.ADDRESSES, bodyData = address)
+        safeApiCallWithBody(HttpMethod.Post, Endpoints.ADDRESSES, bodyData = address)
 }

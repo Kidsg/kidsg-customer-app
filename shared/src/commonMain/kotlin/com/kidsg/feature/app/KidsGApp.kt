@@ -91,7 +91,9 @@ fun KidsGApp(
             Box(
                 modifier = modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
+                    .then(
+                        if (currentScreen is Screen.Splash) Modifier else Modifier.padding(innerPadding)
+                    )
             ) {
                 when (val screen = currentScreen) {
                     is Screen.Splash -> {

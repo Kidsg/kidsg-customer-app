@@ -35,6 +35,19 @@ data class AuthResponseDto(
 )
 
 @Serializable
+data class SendOtpRequestDto(
+    val phone: String? = null,
+    val email: String? = null
+)
+
+@Serializable
+data class VerifyOtpRequestDto(
+    val phone: String? = null,
+    val email: String? = null,
+    val otp: String
+)
+
+@Serializable
 data class SendOtpResponseDto(
     val sent: Boolean,
     val expiresInSeconds: Int = 300
