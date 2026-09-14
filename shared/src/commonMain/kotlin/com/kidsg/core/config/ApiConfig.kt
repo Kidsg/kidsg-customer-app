@@ -13,9 +13,9 @@ object ApiConfig {
 
     val baseUrl: String
         get() = when (currentEnvironment) {
-            AppEnvironment.DEV -> "http://10.0.2.2:3000" // Standard Android emulator loopback
-            AppEnvironment.STAGING -> "https://kidsg-api-staging.vercel.app"
-            AppEnvironment.PRODUCTION -> "https://api.kidsg.in"
+            AppEnvironment.DEV -> "https://kidsg-customer-app.vercel.app"
+            AppEnvironment.STAGING -> "https://kidsg-customer-app.vercel.app"
+            AppEnvironment.PRODUCTION -> "https://kidsg-customer-app.vercel.app"
         }
 
     val requestTimeoutMs: Long = 15_000L
