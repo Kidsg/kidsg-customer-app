@@ -55,12 +55,31 @@ router.post('/auth/send-otp', rateLimit(20, 60000, 'auth_send_otp'), async (req:
 
   // 1. Email OTP handling
   if (email) {
-    // A. Try Supabase Auth first
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await (otpService as any).sendOtp(email, otp);
+
+    // Try sending real 6-digit code via Resend first
+    const emailService = getEmailService();
+    const resendRes = await emailService.sendOtpEmail(email, otp);
+
+    if (resendRes.success) {
+      sendSuccess(res, {
+        sent: true,
+        email,
+        expiresInSeconds: 300,
+      }, 'Verification code sent to your email');
+      return;
+    }
+
+    // If Resend failed (e.g. rate limit or domain restrictions), engage Supabase with production redirect
     if (env.OTP_PROVIDER === 'supabase') {
       try {
         const { error } = await supabaseAuth.auth.signInWithOtp({
           email,
-          options: { shouldCreateUser: true },
+          options: {
+            shouldCreateUser: true,
+            emailRedirectTo: 'https://kidsg-customer-app.vercel.app',
+          },
         });
 
         if (!error) {
@@ -71,18 +90,13 @@ router.post('/auth/send-otp', rateLimit(20, 60000, 'auth_send_otp'), async (req:
           }, 'Verification code sent to your email');
           return;
         }
-        console.warn(`[KidsG] Supabase Auth notice: ${error.message}. Engaging Resend delivery fallback.`);
+        console.warn(`[KidsG] Supabase Auth notice: ${error.message}`);
       } catch (err: any) {
-        console.warn(`[KidsG] Supabase Auth exception: ${err?.message}. Engaging Resend delivery fallback.`);
+        console.warn(`[KidsG] Supabase Auth exception: ${err?.message}`);
       }
     }
 
-    // B. Resend Email Delivery Fallback (bypasses Supabase free-tier email rate limit)
-    const emailService = getEmailService();
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await (otpService as any).sendOtp(email, otp);
-    await emailService.sendOtpEmail(email, otp);
-
+    // Resend or bypass code ready in OTP store
     sendSuccess(res, {
       sent: true,
       email,

@@ -29,15 +29,11 @@ export class ResendEmailService implements EmailService {
       };
     }
 
-    if (!env.RESEND_FROM_EMAIL || env.RESEND_FROM_EMAIL === 'REPLACE_ME') {
-      return {
-        success: false,
-        error: 'Sender email not configured. Please set RESEND_FROM_EMAIL to your verified sender address in Resend.',
-      };
-    }
-
     try {
-      const fromAddress = `${env.RESEND_FROM_NAME} <${env.RESEND_FROM_EMAIL}>`;
+      const senderEmail = (env.RESEND_FROM_EMAIL && env.RESEND_FROM_EMAIL !== 'REPLACE_ME')
+        ? env.RESEND_FROM_EMAIL
+        : 'onboarding@resend.dev';
+      const fromAddress = `${env.RESEND_FROM_NAME || 'KidsG'} <${senderEmail}>`;
       const response = await this.resend.emails.send({
         from: fromAddress,
         to: [toEmail],

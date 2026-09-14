@@ -1469,14 +1469,9 @@ var ResendEmailService = class {
         error: "Resend API key is not configured or invalid."
       };
     }
-    if (!env.RESEND_FROM_EMAIL || env.RESEND_FROM_EMAIL === "REPLACE_ME") {
-      return {
-        success: false,
-        error: "Sender email not configured. Please set RESEND_FROM_EMAIL to your verified sender address in Resend."
-      };
-    }
     try {
-      const fromAddress = `${env.RESEND_FROM_NAME} <${env.RESEND_FROM_EMAIL}>`;
+      const senderEmail = env.RESEND_FROM_EMAIL && env.RESEND_FROM_EMAIL !== "REPLACE_ME" ? env.RESEND_FROM_EMAIL : "onboarding@resend.dev";
+      const fromAddress = `${env.RESEND_FROM_NAME || "KidsG"} <${senderEmail}>`;
       const response = await this.resend.emails.send({
         from: fromAddress,
         to: [toEmail],
@@ -1597,11 +1592,26 @@ router2.post("/auth/send-otp", rateLimit(20, 6e4, "auth_send_otp"), async (req, 
   }
   const { email, phone } = result.data;
   if (email) {
+    const otp = Math.floor(1e5 + Math.random() * 9e5).toString();
+    await otpService.sendOtp(email, otp);
+    const emailService = getEmailService();
+    const resendRes = await emailService.sendOtpEmail(email, otp);
+    if (resendRes.success) {
+      sendSuccess(res, {
+        sent: true,
+        email,
+        expiresInSeconds: 300
+      }, "Verification code sent to your email");
+      return;
+    }
     if (env.OTP_PROVIDER === "supabase") {
       try {
         const { error } = await supabaseAuth.auth.signInWithOtp({
           email,
-          options: { shouldCreateUser: true }
+          options: {
+            shouldCreateUser: true,
+            emailRedirectTo: "https://kidsg-customer-app.vercel.app"
+          }
         });
         if (!error) {
           sendSuccess(res, {
@@ -1611,15 +1621,11 @@ router2.post("/auth/send-otp", rateLimit(20, 6e4, "auth_send_otp"), async (req, 
           }, "Verification code sent to your email");
           return;
         }
-        console.warn(`[KidsG] Supabase Auth notice: ${error.message}. Engaging Resend delivery fallback.`);
+        console.warn(`[KidsG] Supabase Auth notice: ${error.message}`);
       } catch (err) {
-        console.warn(`[KidsG] Supabase Auth exception: ${err?.message}. Engaging Resend delivery fallback.`);
+        console.warn(`[KidsG] Supabase Auth exception: ${err?.message}`);
       }
     }
-    const emailService = getEmailService();
-    const otp = Math.floor(1e5 + Math.random() * 9e5).toString();
-    await otpService.sendOtp(email, otp);
-    await emailService.sendOtpEmail(email, otp);
     sendSuccess(res, {
       sent: true,
       email,
