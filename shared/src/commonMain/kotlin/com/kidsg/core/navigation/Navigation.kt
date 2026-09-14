@@ -5,6 +5,9 @@ import com.kidsg.domain.model.Product
 
 sealed interface Screen {
     data object Splash : Screen
+    data object Onboarding : Screen
+    data object Auth : Screen
+    data object StudentSetup : Screen
     data object Home : Screen
     data class Discovery(val initialMode: IntentModeType? = null) : Screen
     data class ProductDetail(val product: Product) : Screen

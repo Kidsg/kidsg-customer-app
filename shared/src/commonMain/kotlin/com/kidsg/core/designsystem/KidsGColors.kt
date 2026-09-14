@@ -19,6 +19,7 @@ object KidsGColors {
     // Base Surfaces
     val White = Color(0xFFFFFFFF)
     val Background = Color(0xFFF9FAFB)
+    val Surface = Color(0xFFF4F5F7)
     val SurfaceDesk = Color(0xFFF4F5F7)
     val SurfaceCard = Color(0xFFFFFFFF)
     val SurfaceCardSubtle = Color(0xFFF8F9FA)

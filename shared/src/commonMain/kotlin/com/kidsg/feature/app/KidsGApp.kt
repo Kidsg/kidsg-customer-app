@@ -22,9 +22,12 @@ import com.kidsg.data.repository.MockConfigRepository
 import com.kidsg.data.repository.MockProductRepository
 import com.kidsg.domain.model.IntentModeType
 import com.kidsg.domain.model.Product
+import com.kidsg.feature.auth.AuthScreen
 import com.kidsg.feature.bag.SchoolBagScreen
 import com.kidsg.feature.discovery.DiscoveryScreen
 import com.kidsg.feature.home.KidsGDeskHomeScreen
+import com.kidsg.feature.onboarding.OnboardingScreen
+import com.kidsg.feature.onboarding.StudentSetupScreen
 import com.kidsg.feature.product.ProductDeskViewScreen
 import com.kidsg.feature.splash.SplashScreen
 
@@ -41,6 +44,7 @@ fun KidsGApp(
     val productRepository = remember { RepositoryProvider.productRepository }
     val cartRepository = remember { RepositoryProvider.cartRepository }
     val configRepository = remember { RepositoryProvider.configRepository }
+    val authRepository = remember { RepositoryProvider.authRepository }
 
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var currentTab by remember { mutableStateOf(KidsGNavTab.HOME) }
@@ -60,6 +64,7 @@ fun KidsGApp(
     }
 
     val cart by cartRepository.cartState.collectAsState()
+    val currentUser by authRepository.currentUser.collectAsState()
 
     KidsGTheme {
         Scaffold(
@@ -92,6 +97,37 @@ fun KidsGApp(
                     is Screen.Splash -> {
                         SplashScreen(
                             onSplashFinished = {
+                                currentScreen = Screen.Onboarding
+                            }
+                        )
+                    }
+                    is Screen.Onboarding -> {
+                        OnboardingScreen(
+                            onGetStarted = {
+                                navigateTo(Screen.Auth)
+                            },
+                            onExploreGuest = {
+                                currentScreen = Screen.Home
+                                currentTab = KidsGNavTab.HOME
+                            }
+                        )
+                    }
+                    is Screen.Auth -> {
+                        AuthScreen(
+                            authRepository = authRepository,
+                            onAuthSuccess = {
+                                navigateTo(Screen.StudentSetup)
+                            },
+                            onBack = {
+                                navigateBack()
+                            }
+                        )
+                    }
+                    is Screen.StudentSetup -> {
+                        StudentSetupScreen(
+                            authRepository = authRepository,
+                            initialProfile = currentUser,
+                            onSetupComplete = {
                                 currentScreen = Screen.Home
                                 currentTab = KidsGNavTab.HOME
                             }

@@ -27,6 +27,14 @@ object KidsGTypography {
         color = KidsGColors.BlackText
     )
 
+    val DisplaySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        color = KidsGColors.BlackText
+    )
+
     val TitleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
