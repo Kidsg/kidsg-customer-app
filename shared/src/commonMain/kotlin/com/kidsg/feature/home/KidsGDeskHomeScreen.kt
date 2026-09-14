@@ -60,7 +60,9 @@ import com.kidsg.domain.repository.ProductRepository
 fun KidsGDeskHomeScreen(
     productRepository: ProductRepository,
     cartRepository: CartRepository,
+    userProfile: com.kidsg.domain.model.UserProfile? = null,
     onNavigateToDiscovery: (IntentModeType?) -> Unit,
+    onNavigateToCategory: ((String) -> Unit)? = null,
     onNavigateToSearch: () -> Unit,
     onProductClick: (Product) -> Unit,
     onAddToCart: (Product) -> Unit,
@@ -78,15 +80,29 @@ fun KidsGDeskHomeScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
-            // 1. Desk Top Bar (Location & Greeting)
+            // 1. Desk Top Bar (Dynamic Student Greeting & Quick Categories)
             item {
                 DeskHeader(
+                    userProfile = userProfile,
                     store = store,
-                    onSearchClick = onNavigateToSearch
+                    onSearchClick = onNavigateToSearch,
+                    onCategoryClick = { catId ->
+                        if (onNavigateToCategory != null) {
+                            onNavigateToCategory(catId)
+                        } else {
+                            onNavigateToDiscovery(null)
+                        }
+                    }
                 )
             }
 
-            // 2. Urgent / Sticky Notes Intent Modes ("The KidsG Desk")
+            // 2. Desk Inspiration Banner (Matching Reference Screen 9)
+            item {
+                Spacer(modifier = Modifier.height(KidsGSpacing.md))
+                DeskInspirationBanner(onExploreClick = { onNavigateToDiscovery(null) })
+            }
+
+            // 3. Urgent / Sticky Notes Intent Modes ("The KidsG Desk")
             item {
                 Spacer(modifier = Modifier.height(KidsGSpacing.md))
                 StickyNotesSection(
@@ -95,15 +111,9 @@ fun KidsGDeskHomeScreen(
                 )
             }
 
-            // 3. Desk Inspiration Banner
-            item {
-                Spacer(modifier = Modifier.height(KidsGSpacing.lg))
-                DeskInspirationBanner(onExploreClick = { onNavigateToDiscovery(null) })
-            }
-
             // 4. Popular Desk Supplies (Classmate, Camlin, Doms)
             item {
-                Spacer(modifier = Modifier.height(KidsGSpacing.xl))
+                Spacer(modifier = Modifier.height(KidsGSpacing.lg))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -113,11 +123,11 @@ fun KidsGDeskHomeScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Desk Essentials",
+                            text = "Popular Picks",
                             style = KidsGTypography.TitleLarge
                         )
                         Text(
-                            text = "Most loved by students in HSR Layout",
+                            text = "Essentials loved by students in ${userProfile?.schoolName?.takeIf { it.isNotBlank() } ?: "school"}",
                             style = KidsGTypography.BodySmall
                         )
                     }
@@ -135,7 +145,7 @@ fun KidsGDeskHomeScreen(
                     contentPadding = PaddingValues(horizontal = KidsGSpacing.lg),
                     horizontalArrangement = Arrangement.spacedBy(KidsGSpacing.md)
                 ) {
-                    items(popularProducts.take(6)) { product ->
+                    items(popularProducts.take(8)) { product ->
                         val itemInCart = cart.items.find { it.product.id == product.id }
                         val quantity = itemInCart?.quantity ?: 0
 
@@ -152,7 +162,7 @@ fun KidsGDeskHomeScreen(
                 }
             }
 
-            // 5. Partner Store Dispatch Card (Rule #5 - Data Driven)
+            // 5. Partner Store Dispatch Card
             item {
                 Spacer(modifier = Modifier.height(KidsGSpacing.xl))
                 store?.let {
@@ -165,9 +175,16 @@ fun KidsGDeskHomeScreen(
 
 @Composable
 fun DeskHeader(
+    userProfile: com.kidsg.domain.model.UserProfile?,
     store: Store?,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    onCategoryClick: (String) -> Unit
 ) {
+    val studentName = userProfile?.studentName?.takeIf { it.isNotBlank() }
+        ?: userProfile?.name?.takeIf { it.isNotBlank() }
+        ?: "Student"
+    val studentGrade = userProfile?.studentGrade?.takeIf { it.isNotBlank() } ?: "Class 1"
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -175,32 +192,32 @@ fun DeskHeader(
             .border(1.dp, KidsGColors.BorderSubtle)
             .padding(KidsGSpacing.lg)
     ) {
-        // Location and Student Profile Row
+        // Location row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                KidsGIcons.Pencil(modifier = Modifier.size(18.dp), color = KidsGColors.OrangePrimary)
+                KidsGIcons.Pencil(modifier = Modifier.size(16.dp), color = KidsGColors.OrangePrimary)
                 Spacer(modifier = Modifier.width(6.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "HSR Layout, Bengaluru",
-                            style = KidsGTypography.TitleSmall.copy(fontSize = 14.sp)
+                            text = "Bengaluru",
+                            style = KidsGTypography.TitleSmall.copy(fontSize = 13.sp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "▾", color = KidsGColors.OrangePrimary, fontSize = 12.sp)
+                        Text(text = "▾", color = KidsGColors.OrangePrimary, fontSize = 11.sp)
                     }
                     Text(
-                        text = "Delivering to Aarav's Desk",
+                        text = "Delivering to $studentName's Desk",
                         style = KidsGTypography.Caption
                     )
                 }
             }
 
-            // Student avatar pill
+            // Student avatar badge with child initial
             Box(
                 modifier = Modifier
                     .clip(KidsGShapes.FullPill)
@@ -210,7 +227,7 @@ fun DeskHeader(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Aarav • Class 7",
+                    text = "$studentName • $studentGrade",
                     style = KidsGTypography.Tag.copy(color = KidsGColors.BlackText)
                 )
             }
@@ -218,24 +235,92 @@ fun DeskHeader(
 
         Spacer(modifier = Modifier.height(KidsGSpacing.md))
 
-        // Dynamic Time-Aware Greeting (Section 11)
-        Text(
-            text = "Good Morning, Aarav!",
-            style = KidsGTypography.DisplayMedium.copy(fontSize = 22.sp)
-        )
-        Text(
-            text = "Ready for school tomorrow?",
-            style = KidsGTypography.BodyMedium.copy(color = KidsGColors.TextSecondary)
-        )
+        // Dynamic Student Greeting (Matching Reference Screen 9)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Hi, $studentName! 👋",
+                    style = KidsGTypography.DisplayMedium.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                )
+                Text(
+                    text = "Ready to learn today?",
+                    style = KidsGTypography.BodyMedium.copy(color = KidsGColors.TextSecondary)
+                )
+            }
+
+            // Circular Student Avatar Graphic
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(KidsGShapes.FullPill)
+                    .background(KidsGColors.AccentYellow)
+                    .border(2.dp, KidsGColors.OrangePrimary, KidsGShapes.FullPill),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = studentName.firstOrNull()?.uppercase() ?: "S",
+                    style = KidsGTypography.TitleLarge.copy(color = KidsGColors.White, fontWeight = FontWeight.Black)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(KidsGSpacing.md))
 
-        // Interactive "What do you need today?" Search Bar
+        // Interactive Search Bar (Matching Reference Screen 9)
         KidsGSearchBar(
             query = "",
             onQueryChange = {},
             isClickableOnly = true,
-            onClick = onSearchClick
+            onClick = onSearchClick,
+            placeholder = "Search for products..."
+        )
+
+        Spacer(modifier = Modifier.height(KidsGSpacing.md))
+
+        // Quick Category Row (Matching Reference Screen 9: Books, Writing, Art & Craft, Bags)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            QuickCategoryChip(icon = "📚", title = "Books", onClick = { onCategoryClick("notebooks") })
+            QuickCategoryChip(icon = "✏️", title = "Writing", onClick = { onCategoryClick("pens_pencils") })
+            QuickCategoryChip(icon = "🎨", title = "Art & Craft", onClick = { onCategoryClick("art_craft") })
+            QuickCategoryChip(icon = "🎒", title = "Bags", onClick = { onCategoryClick("school_bags") })
+        }
+    }
+}
+
+@Composable
+fun QuickCategoryChip(
+    icon: String,
+    title: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(KidsGShapes.MediumRounded)
+            .clickable(onClick = onClick)
+            .padding(KidsGSpacing.xs)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(KidsGShapes.CardRounded)
+                .background(KidsGColors.SurfaceElevated)
+                .border(1.dp, KidsGColors.BorderSubtle, KidsGShapes.CardRounded),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = icon, fontSize = 24.sp)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = title,
+            style = KidsGTypography.Caption.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         )
     }
 }

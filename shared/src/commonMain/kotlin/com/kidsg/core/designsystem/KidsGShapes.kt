@@ -19,4 +19,8 @@ object KidsGShapes {
     val StickyNote = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
     val DeskCard = RoundedCornerShape(18.dp)
     val BottomSheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomEnd = 0.dp, bottomStart = 0.dp)
+
+    // Aliases for modern screen layouts
+    val CardRounded = DeskCard
+    val MediumRounded = Medium
 }

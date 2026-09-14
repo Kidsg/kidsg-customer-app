@@ -34,9 +34,9 @@ import kotlinx.coroutines.delay
 fun SplashScreen(
     onSplashFinished: () -> Unit
 ) {
-    // Safety fallback timeout (in case device video decoder doesn't fire completion)
+    // 5.5-second auto-advance timeout (between 5-6 seconds)
     LaunchedEffect(Unit) {
-        delay(9000)
+        delay(5500)
         onSplashFinished()
     }
 

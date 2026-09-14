@@ -59,6 +59,7 @@ fun DiscoveryScreen(
     productRepository: ProductRepository,
     cartRepository: CartRepository,
     initialMode: IntentModeType? = null,
+    initialCategoryId: String? = null,
     onProductClick: (Product) -> Unit,
     onBackToHome: () -> Unit,
     onAddToCart: (Product) -> Unit,
@@ -67,6 +68,7 @@ fun DiscoveryScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedMode by remember { mutableStateOf(initialMode) }
+    var selectedCategoryId by remember { mutableStateOf(initialCategoryId) }
     var searchQuery by remember { mutableStateOf("") }
     val cart by cartRepository.cartState.collectAsState()
 
@@ -75,14 +77,15 @@ fun DiscoveryScreen(
     val oopsItems = remember { kotlinx.coroutines.runBlocking { productRepository.getOopsEmergencyItems() } }
     val allProducts = remember { kotlinx.coroutines.runBlocking { productRepository.getPopularProducts() } }
 
-    val displayedProducts = remember(selectedMode, searchQuery) {
-        when {
-            searchQuery.isNotBlank() -> allProducts.filter {
-                it.name.contains(searchQuery, ignoreCase = true) ||
-                it.brand.contains(searchQuery, ignoreCase = true)
-            }
-            selectedMode != null -> allProducts.filter { it.intentModes.contains(selectedMode!!.name) }
-            else -> allProducts
+    val displayedProducts = remember(selectedMode, selectedCategoryId, searchQuery) {
+        allProducts.filter { product ->
+            val matchesCategory = selectedCategoryId == null || product.categoryId == selectedCategoryId
+            val matchesMode = selectedMode == null || product.intentModes.contains(selectedMode!!.name)
+            val matchesSearch = searchQuery.isBlank() ||
+                product.name.contains(searchQuery, ignoreCase = true) ||
+                product.brand.contains(searchQuery, ignoreCase = true) ||
+                product.tags.any { it.contains(searchQuery, ignoreCase = true) }
+            matchesCategory && matchesMode && matchesSearch
         }
     }
 
@@ -116,7 +119,11 @@ fun DiscoveryScreen(
                         Spacer(modifier = Modifier.width(KidsGSpacing.md))
 
                         Text(
-                            text = "Stationery Discovery",
+                            text = if (selectedCategoryId != null) {
+                                categories.find { it.id == selectedCategoryId }?.name ?: "Stationery Discovery"
+                            } else {
+                                "Stationery Discovery"
+                            },
                             style = KidsGTypography.TitleLarge
                         )
                     }
@@ -131,24 +138,30 @@ fun DiscoveryScreen(
                 }
             }
 
-            // 2. Intent Modes Quick Filter Tabs
+            // 2. Horizontal Category Filter Chips (Matching Reference Screen 11)
             item(span = { GridItemSpan(2) }) {
-                Row(
+                androidx.compose.foundation.lazy.LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KidsGSpacing.sm)
                 ) {
-                    ModeFilterChip(
-                        title = "All Desk",
-                        isSelected = selectedMode == null,
-                        onClick = { selectedMode = null }
-                    )
-
-                    intentModes.forEach { mode ->
+                    item {
                         ModeFilterChip(
-                            title = mode.title,
-                            isSelected = selectedMode == mode.type,
-                            onClick = { selectedMode = mode.type }
+                            title = "All",
+                            isSelected = selectedCategoryId == null,
+                            onClick = { selectedCategoryId = null }
                         )
+                    }
+
+                    categories.forEach { cat ->
+                        item {
+                            ModeFilterChip(
+                                title = cat.name,
+                                isSelected = selectedCategoryId == cat.id,
+                                onClick = {
+                                    selectedCategoryId = if (selectedCategoryId == cat.id) null else cat.id
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -163,11 +176,11 @@ fun DiscoveryScreen(
                 }
             }
 
-            // 4. Stationery Wall (Categories) when no mode or search filter
-            if (selectedMode == null && searchQuery.isEmpty()) {
+            // 4. Stationery Wall (Categories 2-column grid when browsing all and no search)
+            if (selectedMode == null && selectedCategoryId == null && searchQuery.isEmpty()) {
                 item(span = { GridItemSpan(2) }) {
                     Text(
-                        text = "The Stationery Wall",
+                        text = "Categories",
                         style = KidsGTypography.TitleMedium.copy(fontSize = 18.sp)
                     )
                 }
@@ -175,7 +188,7 @@ fun DiscoveryScreen(
                 items(categories) { cat ->
                     KidsGCategoryCard(
                         category = cat,
-                        onClick = { category -> searchQuery = category.name }
+                        onClick = { category -> selectedCategoryId = category.id }
                     )
                 }
 
@@ -185,6 +198,27 @@ fun DiscoveryScreen(
                         text = "Curated For Your Desk",
                         style = KidsGTypography.TitleMedium.copy(fontSize = 18.sp)
                     )
+                }
+            }
+
+            // Category active banner if selected
+            if (selectedCategoryId != null) {
+                item(span = { GridItemSpan(2) }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${displayedProducts.size} supplies found",
+                            style = KidsGTypography.BodySmall.copy(color = KidsGColors.TextSecondary)
+                        )
+                        Text(
+                            text = "Clear filter ✕",
+                            style = KidsGTypography.Caption.copy(color = KidsGColors.OrangePrimary, fontWeight = FontWeight.Bold),
+                            modifier = Modifier.clickable { selectedCategoryId = null }
+                        )
+                    }
                 }
             }
 

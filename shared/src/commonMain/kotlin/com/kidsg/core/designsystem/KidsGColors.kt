@@ -57,4 +57,8 @@ object KidsGColors {
     val ShadowColor = Color(0x14000000)
     val ShadowElevated = Color(0x24000000)
     val OverlayScrim = Color(0x66000000)
+
+    // Aliases for modern screens
+    val BackgroundPrimary = Background
+    val SurfaceElevated = SurfaceCardSubtle
 }

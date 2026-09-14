@@ -2,6 +2,7 @@ package com.kidsg.data.repository
 
 import com.kidsg.core.config.ApiConfig
 import com.kidsg.core.network.ApiResult
+import com.kidsg.core.storage.SessionStorage
 import com.kidsg.data.remote.api.AuthApi
 import com.kidsg.domain.model.UserProfile
 import com.kidsg.domain.repository.AuthRepository
@@ -13,18 +14,17 @@ class ProductionAuthRepository(
     private val authApi: AuthApi = AuthApi()
 ) : AuthRepository {
 
-    private val _currentUser = MutableStateFlow<UserProfile?>(
-        UserProfile(
-            id = "user_dev_default",
-            name = "Aarav Sharma",
-            phone = "+91 98765 43210",
-            email = "student@kidsg.in",
-            studentName = "Aarav Sharma",
-            studentGrade = "Class 7",
-            schoolName = "National Public School, Koramangala",
-            isParentMode = false
-        )
-    )
+    private val _currentUser: MutableStateFlow<UserProfile?>
+
+    init {
+        val savedToken = SessionStorage.getAuthToken()
+        if (savedToken != null) {
+            ApiConfig.authToken = savedToken
+        }
+        val savedProfile = SessionStorage.getUserProfile()
+        _currentUser = MutableStateFlow(savedProfile)
+    }
+
     override val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
     override suspend fun requestOtp(phoneNumber: String): Result<Boolean> {
@@ -46,15 +46,18 @@ class ProductionAuthRepository(
         return when (val res = authApi.verifyOtp(phoneNumber, otpCode)) {
             is ApiResult.Success -> {
                 ApiConfig.authToken = res.data.token
+                SessionStorage.saveAuthToken(res.data.token)
                 val profile = UserProfile(
                     id = res.data.user.id,
                     name = "${res.data.user.firstName ?: "Student"} ${res.data.user.lastName ?: ""}".trim(),
                     phone = res.data.user.phone ?: if (!phoneNumber.contains("@")) phoneNumber else "",
                     email = res.data.user.email ?: if (phoneNumber.contains("@")) phoneNumber else "$phoneNumber@kidsg.in",
-                    studentGrade = res.data.profile?.selectedClass ?: "Class 7",
-                    schoolName = res.data.profile?.selectedSchool ?: "National Public School"
+                    studentName = res.data.user.firstName ?: "",
+                    studentGrade = res.data.profile?.selectedClass ?: "Class 1",
+                    schoolName = res.data.profile?.selectedSchool ?: "KidsG Partner School"
                 )
                 _currentUser.value = profile
+                SessionStorage.saveUserProfile(profile)
                 Result.success(profile)
             }
             is ApiResult.Error -> {
@@ -64,9 +67,14 @@ class ProductionAuthRepository(
                         id = "user_dev_${System.currentTimeMillis()}",
                         name = "Student",
                         phone = if (!phoneNumber.contains("@")) phoneNumber else "",
-                        email = if (phoneNumber.contains("@")) phoneNumber else ""
+                        email = if (phoneNumber.contains("@")) phoneNumber else "",
+                        studentName = "Student",
+                        studentGrade = "Class 1",
+                        schoolName = "KidsG Partner School"
                     )
                     _currentUser.value = profile
+                    SessionStorage.saveAuthToken("dev_offline_token")
+                    SessionStorage.saveUserProfile(profile)
                     Result.success(profile)
                 } else {
                     Result.failure(Exception(res.exception.userFriendlyMessage))
@@ -77,11 +85,14 @@ class ProductionAuthRepository(
 
     override suspend fun updateProfile(profile: UserProfile): Result<UserProfile> {
         _currentUser.value = profile
+        SessionStorage.saveUserProfile(profile)
         return Result.success(profile)
     }
 
     override suspend fun logout() {
         ApiConfig.authToken = null
+        SessionStorage.clearSession()
         _currentUser.value = null
     }
 }
+

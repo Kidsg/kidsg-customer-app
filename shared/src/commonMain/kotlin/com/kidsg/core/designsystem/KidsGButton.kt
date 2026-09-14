@@ -102,3 +102,26 @@ fun KidsGSecondaryButton(
         Text(text = text, style = KidsGTypography.ButtonText.copy(color = contentColor))
     }
 }
+
+/**
+ * KidsG Outline Button alias
+ */
+@Composable
+fun KidsGOutlineButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    borderColor: Color = KidsGColors.OrangePrimary,
+    contentColor: Color = KidsGColors.OrangePrimary
+) {
+    KidsGSecondaryButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        borderColor = borderColor,
+        contentColor = contentColor
+    )
+}
+

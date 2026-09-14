@@ -16,26 +16,27 @@ import com.kidsg.core.designsystem.KidsGBottomBar
 import com.kidsg.core.designsystem.KidsGNavTab
 import com.kidsg.core.designsystem.KidsGTheme
 import com.kidsg.core.navigation.Screen
-import com.kidsg.data.mock.KidsGMockData
-import com.kidsg.data.repository.MockCartRepository
-import com.kidsg.data.repository.MockConfigRepository
-import com.kidsg.data.repository.MockProductRepository
-import com.kidsg.domain.model.IntentModeType
-import com.kidsg.domain.model.Product
+import com.kidsg.data.repository.RepositoryProvider
 import com.kidsg.feature.auth.AuthScreen
 import com.kidsg.feature.bag.SchoolBagScreen
+import com.kidsg.feature.checkout.AddAddressScreen
+import com.kidsg.feature.checkout.CheckoutScreen
+import com.kidsg.feature.checkout.OrderSuccessScreen
+import com.kidsg.feature.checkout.PaymentMethodScreen
 import com.kidsg.feature.discovery.DiscoveryScreen
 import com.kidsg.feature.home.KidsGDeskHomeScreen
 import com.kidsg.feature.onboarding.OnboardingScreen
 import com.kidsg.feature.onboarding.StudentSetupScreen
+import com.kidsg.feature.orders.OrdersListScreen
 import com.kidsg.feature.product.ProductDeskViewScreen
+import com.kidsg.feature.profile.HelpSupportScreen
+import com.kidsg.feature.profile.ProfileScreen
 import com.kidsg.feature.splash.SplashScreen
-
-import com.kidsg.data.repository.RepositoryProvider
+import com.kidsg.feature.tracking.OrderTrackingScreen
 
 /**
  * KidsG Main Application Entry Point
- * Hosts the 5 Hero Experiences with clean state navigation and bottom bar.
+ * Hosts all 20 screens with clean state navigation and bottom bar.
  */
 @Composable
 fun KidsGApp(
@@ -66,21 +67,26 @@ fun KidsGApp(
     val cart by cartRepository.cartState.collectAsState()
     val currentUser by authRepository.currentUser.collectAsState()
 
+    val isTopLevelScreen = currentScreen is Screen.Home ||
+            currentScreen is Screen.Discovery ||
+            currentScreen is Screen.Bag ||
+            currentScreen is Screen.Orders ||
+            currentScreen is Screen.Profile
+
     KidsGTheme {
         Scaffold(
             bottomBar = {
-                // Show bottom bar on primary exploration screens
-                if (currentScreen is Screen.Home || currentScreen is Screen.Discovery || currentScreen is Screen.Bag) {
+                if (isTopLevelScreen) {
                     KidsGBottomBar(
                         currentTab = currentTab,
                         onTabSelected = { tab ->
                             currentTab = tab
                             when (tab) {
                                 KidsGNavTab.HOME -> currentScreen = Screen.Home
-                                KidsGNavTab.CATEGORIES -> currentScreen = Screen.Discovery(null)
+                                KidsGNavTab.CATEGORIES -> currentScreen = Screen.Discovery(null, null)
                                 KidsGNavTab.BAG -> currentScreen = Screen.Bag
-                                KidsGNavTab.ORDERS -> currentScreen = Screen.Home
-                                KidsGNavTab.PROFILE -> currentScreen = Screen.Home
+                                KidsGNavTab.ORDERS -> currentScreen = Screen.Orders
+                                KidsGNavTab.PROFILE -> currentScreen = Screen.Profile
                             }
                         },
                         bagItemCount = cart.itemCount
@@ -99,10 +105,16 @@ fun KidsGApp(
                     is Screen.Splash -> {
                         SplashScreen(
                             onSplashFinished = {
-                                currentScreen = Screen.Onboarding
+                                if (currentUser != null && currentUser?.studentName?.isNotBlank() == true) {
+                                    currentScreen = Screen.Home
+                                    currentTab = KidsGNavTab.HOME
+                                } else {
+                                    currentScreen = Screen.Onboarding
+                                }
                             }
                         )
                     }
+
                     is Screen.Onboarding -> {
                         OnboardingScreen(
                             onGetStarted = {
@@ -114,6 +126,7 @@ fun KidsGApp(
                             }
                         )
                     }
+
                     is Screen.Auth -> {
                         AuthScreen(
                             authRepository = authRepository,
@@ -125,6 +138,7 @@ fun KidsGApp(
                             }
                         )
                     }
+
                     is Screen.StudentSetup -> {
                         StudentSetupScreen(
                             authRepository = authRepository,
@@ -135,17 +149,23 @@ fun KidsGApp(
                             }
                         )
                     }
+
                     is Screen.Home -> {
                         KidsGDeskHomeScreen(
                             productRepository = productRepository,
                             cartRepository = cartRepository,
+                            userProfile = currentUser,
                             onNavigateToDiscovery = { mode ->
                                 currentTab = KidsGNavTab.CATEGORIES
-                                navigateTo(Screen.Discovery(mode))
+                                navigateTo(Screen.Discovery(mode, null))
+                            },
+                            onNavigateToCategory = { catId ->
+                                currentTab = KidsGNavTab.CATEGORIES
+                                navigateTo(Screen.Discovery(null, catId))
                             },
                             onNavigateToSearch = {
                                 currentTab = KidsGNavTab.CATEGORIES
-                                navigateTo(Screen.Discovery(null))
+                                navigateTo(Screen.Discovery(null, null))
                             },
                             onProductClick = { product ->
                                 navigateTo(Screen.ProductDetail(product))
@@ -171,11 +191,13 @@ fun KidsGApp(
                             }
                         )
                     }
+
                     is Screen.Discovery -> {
                         DiscoveryScreen(
                             productRepository = productRepository,
                             cartRepository = cartRepository,
                             initialMode = screen.initialMode,
+                            initialCategoryId = screen.initialCategoryId,
                             onProductClick = { product ->
                                 navigateTo(Screen.ProductDetail(product))
                             },
@@ -204,6 +226,7 @@ fun KidsGApp(
                             }
                         )
                     }
+
                     is Screen.ProductDetail -> {
                         ProductDeskViewScreen(
                             product = screen.product,
@@ -215,12 +238,13 @@ fun KidsGApp(
                             }
                         )
                     }
+
                     is Screen.Bag -> {
                         SchoolBagScreen(
                             cartRepository = cartRepository,
                             configRepository = configRepository,
                             onProceedToCheckout = {
-                                // Transition to checkout review
+                                navigateTo(Screen.Checkout)
                             },
                             onStartShopping = {
                                 currentTab = KidsGNavTab.HOME
@@ -228,12 +252,113 @@ fun KidsGApp(
                             }
                         )
                     }
+
+                    is Screen.Checkout -> {
+                        CheckoutScreen(
+                            userProfile = currentUser,
+                            subtotal = cart.subtotal.takeIf { it > 0 } ?: 260.0,
+                            onBack = { navigateBack() },
+                            onChangeAddress = { navigateTo(Screen.AddAddress) },
+                            onContinueToPayment = { totalAmount, speed ->
+                                navigateTo(Screen.PaymentMethod(totalAmount, speed))
+                            }
+                        )
+                    }
+
+                    is Screen.AddAddress -> {
+                        AddAddressScreen(
+                            onBack = { navigateBack() },
+                            onAddressSaved = {
+                                navigateBack()
+                            }
+                        )
+                    }
+
+                    is Screen.PaymentMethod -> {
+                        PaymentMethodScreen(
+                            totalAmount = screen.totalAmount,
+                            deliverySpeed = screen.deliverySpeed,
+                            onBack = { navigateBack() },
+                            onPaymentSuccess = { newOrderId ->
+                                kotlinx.coroutines.runBlocking {
+                                    cartRepository.clearCart()
+                                }
+                                currentScreen = Screen.OrderSuccess(newOrderId, screen.totalAmount)
+                            }
+                        )
+                    }
+
+                    is Screen.OrderSuccess -> {
+                        OrderSuccessScreen(
+                            orderId = screen.orderId,
+                            totalAmount = screen.totalAmount,
+                            onViewOrder = {
+                                currentScreen = Screen.OrderTracking(screen.orderId)
+                            },
+                            onContinueShopping = {
+                                currentTab = KidsGNavTab.HOME
+                                currentScreen = Screen.Home
+                            }
+                        )
+                    }
+
+                    is Screen.OrderTracking -> {
+                        OrderTrackingScreen(
+                            orderId = screen.orderId,
+                            onBack = {
+                                currentTab = KidsGNavTab.ORDERS
+                                currentScreen = Screen.Orders
+                            }
+                        )
+                    }
+
+                    is Screen.Orders -> {
+                        OrdersListScreen(
+                            onBack = {
+                                currentTab = KidsGNavTab.HOME
+                                currentScreen = Screen.Home
+                            },
+                            onOrderClick = { orderId ->
+                                navigateTo(Screen.OrderTracking(orderId))
+                            }
+                        )
+                    }
+
+                    is Screen.Profile -> {
+                        ProfileScreen(
+                            userProfile = currentUser,
+                            onNavigateToAddresses = { navigateTo(Screen.AddAddress) },
+                            onNavigateToOrders = {
+                                currentTab = KidsGNavTab.ORDERS
+                                currentScreen = Screen.Orders
+                            },
+                            onNavigateToHelp = { navigateTo(Screen.HelpSupport) },
+                            onLogout = {
+                                kotlinx.coroutines.runBlocking {
+                                    authRepository.logout()
+                                }
+                                currentScreen = Screen.Onboarding
+                            }
+                        )
+                    }
+
+                    is Screen.HelpSupport -> {
+                        HelpSupportScreen(
+                            onBack = { navigateBack() },
+                            onTrackOrder = {
+                                navigateTo(Screen.OrderTracking("KG12345678"))
+                            }
+                        )
+                    }
+
                     else -> {
                         KidsGDeskHomeScreen(
                             productRepository = productRepository,
                             cartRepository = cartRepository,
-                            onNavigateToDiscovery = { mode -> currentScreen = Screen.Discovery(mode) },
-                            onNavigateToSearch = { currentScreen = Screen.Discovery(null) },
+                            userProfile = currentUser,
+                            onNavigateToDiscovery = { mode -> currentScreen = Screen.Discovery(mode, null) },
+                            onNavigateToCategory = { catId -> currentScreen = Screen.Discovery(null, catId) },
+                            onNavigateToSearch = { currentScreen = Screen.Discovery(null, null) },
                             onProductClick = { product -> currentScreen = Screen.ProductDetail(product) },
                             onAddToCart = {},
                             onIncreaseQuantity = {},
