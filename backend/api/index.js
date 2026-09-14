@@ -1459,25 +1459,26 @@ var otpService = getOtpService();
 var signupSchema = z2.object({
   phone: z2.string().min(10, "Valid phone number required"),
   firstName: z2.string().min(2, "First name is required"),
-  lastName: z2.string().optional(),
-  email: z2.string().email().optional(),
+  lastName: z2.string().nullish(),
+  email: z2.string().email().nullish().or(z2.literal("")),
   role: z2.enum(["CUSTOMER", "ADMIN", "PARTNER", "DELIVERY_PARTNER"]).default("CUSTOMER")
 });
 var loginSchema = z2.object({
-  phone: z2.string().min(10),
-  password: z2.string().optional()
+  phone: z2.string().min(10).nullish(),
+  email: z2.string().email().nullish(),
+  password: z2.string().nullish()
 });
 var sendOtpSchema = z2.object({
-  email: z2.string().email().optional(),
-  phone: z2.string().min(10).optional()
-}).refine((data) => data.email || data.phone, {
+  email: z2.string().email().nullish().or(z2.literal("")),
+  phone: z2.string().min(10).nullish().or(z2.literal(""))
+}).refine((data) => data.email && data.email.trim().length > 0 || data.phone && data.phone.trim().length > 0, {
   message: "Either email or phone number is required"
 });
 var verifyOtpSchema = z2.object({
-  email: z2.string().email().optional(),
-  phone: z2.string().min(10).optional(),
-  otp: z2.string().min(6).max(8, "OTP must be valid")
-}).refine((data) => data.email || data.phone, {
+  email: z2.string().email().nullish().or(z2.literal("")),
+  phone: z2.string().min(10).nullish().or(z2.literal("")),
+  otp: z2.string().min(4).max(8, "OTP must be valid")
+}).refine((data) => data.email && data.email.trim().length > 0 || data.phone && data.phone.trim().length > 0, {
   message: "Either email or phone number is required"
 });
 router2.post("/auth/send-otp", rateLimit(5, 6e4, "auth_send_otp"), async (req, res) => {
@@ -1616,14 +1617,14 @@ var router3 = Router3();
 var onboardingCompleteSchema = z3.object({
   selectedClass: z3.string().min(1, "Class/Standard is required"),
   selectedSchool: z3.string().min(2, "School name is required"),
-  preferredCategories: z3.array(z3.string()).optional()
+  preferredCategories: z3.array(z3.string()).nullish()
 });
 var locationSchema = z3.object({
   latitude: z3.number(),
   longitude: z3.number(),
-  address: z3.string().optional(),
-  city: z3.string().optional(),
-  postalCode: z3.string().optional()
+  address: z3.string().nullish(),
+  city: z3.string().nullish(),
+  postalCode: z3.string().nullish()
 });
 router3.get("/onboarding", requireAuth(), (req, res) => {
   const profile = db.getProfile(req.user.id);
@@ -1682,12 +1683,12 @@ import { Router as Router4 } from "express";
 import { z as z4 } from "zod";
 var router4 = Router4();
 var updateProfileSchema = z4.object({
-  firstName: z4.string().min(1).optional(),
-  lastName: z4.string().optional(),
-  email: z4.string().email().optional(),
-  selectedClass: z4.string().optional(),
-  selectedSchool: z4.string().optional(),
-  avatarUrl: z4.string().url().optional()
+  firstName: z4.string().min(1).nullish(),
+  lastName: z4.string().nullish(),
+  email: z4.string().email().nullish(),
+  selectedClass: z4.string().nullish(),
+  selectedSchool: z4.string().nullish(),
+  avatarUrl: z4.string().url().nullish()
 });
 router4.get("/profile", requireAuth(), (req, res) => {
   const profile = db.getProfile(req.user.id);
@@ -1942,7 +1943,7 @@ var router9 = Router9();
 var addItemSchema = z6.object({
   productId: z6.string().min(1, "Product ID is required"),
   quantity: z6.number().int().positive("Quantity must be greater than zero").default(1),
-  selectedVariant: z6.string().optional()
+  selectedVariant: z6.string().nullish()
 });
 var updateItemSchema = z6.object({
   quantity: z6.number().int().min(0, "Quantity cannot be negative")
@@ -2027,13 +2028,13 @@ import { Router as Router11 } from "express";
 import { z as z8 } from "zod";
 var router11 = Router11();
 var checkoutPreviewSchema = z8.object({
-  couponCode: z8.string().optional()
+  couponCode: z8.string().nullish()
 });
 var checkoutCreateSchema = z8.object({
   addressId: z8.string().min(1, "Delivery address is required"),
-  couponCode: z8.string().optional(),
+  couponCode: z8.string().nullish(),
   paymentMethod: z8.string().default("UPI"),
-  notes: z8.string().optional()
+  notes: z8.string().nullish()
 });
 router11.post("/checkout/preview", requireAuth(), (req, res) => {
   const result = checkoutPreviewSchema.safeParse(req.body);

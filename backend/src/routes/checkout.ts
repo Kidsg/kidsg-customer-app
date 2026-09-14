@@ -7,14 +7,14 @@ import { db } from '../lib/db.js';
 const router = Router();
 
 const checkoutPreviewSchema = z.object({
-  couponCode: z.string().optional(),
+  couponCode: z.string().nullish(),
 });
 
 const checkoutCreateSchema = z.object({
   addressId: z.string().min(1, 'Delivery address is required'),
-  couponCode: z.string().optional(),
+  couponCode: z.string().nullish(),
   paymentMethod: z.string().default('UPI'),
-  notes: z.string().optional(),
+  notes: z.string().nullish(),
 });
 
 // POST /api/checkout/preview

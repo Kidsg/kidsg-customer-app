@@ -9,15 +9,15 @@ const router = Router();
 const onboardingCompleteSchema = z.object({
   selectedClass: z.string().min(1, 'Class/Standard is required'),
   selectedSchool: z.string().min(2, 'School name is required'),
-  preferredCategories: z.array(z.string()).optional(),
+  preferredCategories: z.array(z.string()).nullish(),
 });
 
 const locationSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  postalCode: z.string().optional(),
+  address: z.string().nullish(),
+  city: z.string().nullish(),
+  postalCode: z.string().nullish(),
 });
 
 // GET /api/onboarding

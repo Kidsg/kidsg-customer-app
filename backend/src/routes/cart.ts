@@ -9,7 +9,7 @@ const router = Router();
 const addItemSchema = z.object({
   productId: z.string().min(1, 'Product ID is required'),
   quantity: z.number().int().positive('Quantity must be greater than zero').default(1),
-  selectedVariant: z.string().optional(),
+  selectedVariant: z.string().nullish(),
 });
 
 const updateItemSchema = z.object({

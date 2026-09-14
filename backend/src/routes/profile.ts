@@ -7,12 +7,12 @@ import { db } from '../lib/db.js';
 const router = Router();
 
 const updateProfileSchema = z.object({
-  firstName: z.string().min(1).optional(),
-  lastName: z.string().optional(),
-  email: z.string().email().optional(),
-  selectedClass: z.string().optional(),
-  selectedSchool: z.string().optional(),
-  avatarUrl: z.string().url().optional(),
+  firstName: z.string().min(1).nullish(),
+  lastName: z.string().nullish(),
+  email: z.string().email().nullish(),
+  selectedClass: z.string().nullish(),
+  selectedSchool: z.string().nullish(),
+  avatarUrl: z.string().url().nullish(),
 });
 
 // GET /api/profile

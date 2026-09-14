@@ -12,31 +12,32 @@ const otpService = getOtpService();
 const signupSchema = z.object({
   phone: z.string().min(10, 'Valid phone number required'),
   firstName: z.string().min(2, 'First name is required'),
-  lastName: z.string().optional(),
-  email: z.string().email().optional(),
+  lastName: z.string().nullish(),
+  email: z.string().email().nullish().or(z.literal('')),
   role: z.enum(['CUSTOMER', 'ADMIN', 'PARTNER', 'DELIVERY_PARTNER']).default('CUSTOMER'),
 });
 
 const loginSchema = z.object({
-  phone: z.string().min(10),
-  password: z.string().optional(),
+  phone: z.string().min(10).nullish(),
+  email: z.string().email().nullish(),
+  password: z.string().nullish(),
 });
 
 import { supabaseAuth } from '../lib/supabase.js';
 import { env } from '../config/env.js';
 
 const sendOtpSchema = z.object({
-  email: z.string().email().optional(),
-  phone: z.string().min(10).optional(),
-}).refine(data => data.email || data.phone, {
+  email: z.string().email().nullish().or(z.literal('')),
+  phone: z.string().min(10).nullish().or(z.literal('')),
+}).refine(data => (data.email && data.email.trim().length > 0) || (data.phone && data.phone.trim().length > 0), {
   message: 'Either email or phone number is required',
 });
 
 const verifyOtpSchema = z.object({
-  email: z.string().email().optional(),
-  phone: z.string().min(10).optional(),
-  otp: z.string().min(6).max(8, 'OTP must be valid'),
-}).refine(data => data.email || data.phone, {
+  email: z.string().email().nullish().or(z.literal('')),
+  phone: z.string().min(10).nullish().or(z.literal('')),
+  otp: z.string().min(4).max(8, 'OTP must be valid'),
+}).refine(data => (data.email && data.email.trim().length > 0) || (data.phone && data.phone.trim().length > 0), {
   message: 'Either email or phone number is required',
 });
 
