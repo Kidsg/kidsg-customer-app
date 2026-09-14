@@ -8,9 +8,9 @@ interface StoredOtp {
 export class MockOtpService implements OtpService {
   private static otpStore: Map<string, StoredOtp> = new Map();
 
-  async sendOtp(phone: string): Promise<OtpSendResult> {
-    // Generate a random 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  async sendOtp(phone: string, customOtp?: string): Promise<OtpSendResult> {
+    // Generate or use custom 6-digit OTP
+    const otp = customOtp || Math.floor(100000 + Math.random() * 900000).toString();
     const expiresInSeconds = 300; // 5 minutes
     const expiresAt = Date.now() + expiresInSeconds * 1000;
 

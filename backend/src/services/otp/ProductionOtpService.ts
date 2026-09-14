@@ -70,7 +70,7 @@ export class ProductionOtpService implements OtpService {
 }
 
 export function getOtpService(): OtpService {
-  if (env.OTP_PROVIDER === 'mock') {
+  if (env.OTP_PROVIDER === 'mock' || env.OTP_PROVIDER === 'supabase') {
     return new MockOtpService();
   }
   return new ProductionOtpService();
