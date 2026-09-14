@@ -1,6 +1,7 @@
 {
   "name": "kidsg-api",
   "version": "1.0.0",
+  "type": "module",
   "description": "KidsG Production API - Quick commerce for school supplies",
   "main": "dist/server.js",
   "scripts": {
