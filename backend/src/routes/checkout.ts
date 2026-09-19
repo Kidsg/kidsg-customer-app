@@ -20,7 +20,7 @@ const checkoutCreateSchema = z.object({
 // POST /api/checkout/preview
 router.post('/checkout/preview', requireAuth(), (req: Request, res: Response) => {
   const result = checkoutPreviewSchema.safeParse(req.body);
-  const couponCode = result.success ? result.data.couponCode : undefined;
+  const couponCode = result.success ? (result.data.couponCode || undefined) : undefined;
 
   const checkout = db.calculateCheckout(req.user!.id, couponCode);
 
@@ -48,7 +48,13 @@ router.post('/checkout/create', requireAuth(), (req: Request, res: Response) => 
   }
 
   const { addressId, couponCode, paymentMethod, notes } = result.data;
-  const orderRes = db.createOrder(req.user!.id, addressId, paymentMethod, couponCode, notes);
+  const orderRes = db.createOrder(
+    req.user!.id,
+    addressId,
+    paymentMethod,
+    couponCode || undefined,
+    notes || undefined
+  );
 
   if (!orderRes.success || !orderRes.order) {
     sendError(res, orderRes.error || 'Failed to initialize checkout', 'CHECKOUT_FAILED', 400);

@@ -21,13 +21,19 @@ var envSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().default(""),
   SUPABASE_SERVICE_ROLE_KEY: z.string().default(""),
   JWT_SECRET: z.string().default("kidsg_development_jwt_secret_must_be_changed_in_prod"),
-  // Email & Resend
-  EMAIL_PROVIDER: z.enum(["resend", "mock"]).default("resend"),
+  // Email & Providers (SMTP / Resend / Mock)
+  EMAIL_PROVIDER: z.enum(["smtp", "resend", "mock"]).default("smtp"),
+  SMTP_HOST: z.string().default("smtp.gmail.com"),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_USER: z.string().default("buildingwithkidsg@gmail.com"),
+  SMTP_PASS: z.string().default("dykzeeyqtkkpzhlr"),
+  SMTP_FROM: z.string().default("KidsG <buildingwithkidsg@gmail.com>"),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().default("REPLACE_ME"),
   RESEND_FROM_NAME: z.string().default("KidsG"),
   // Providers
-  OTP_PROVIDER: z.enum(["supabase", "mock", "msg91", "twilio", "twofactor"]).default("supabase"),
+  OTP_PROVIDER: z.enum(["memory", "mock", "supabase", "msg91", "twilio", "twofactor"]).default("memory"),
   OTP_API_URL: z.string().optional(),
   OTP_API_KEY: z.string().optional(),
   PAYMENT_PROVIDER: z.enum(["mock", "razorpay", "cashfree", "phonepe"]).default("mock"),
@@ -194,198 +200,6 @@ if (isConfigured) {
   supabaseAuthClient = supabaseClient;
 }
 var supabaseAdmin = supabaseClient;
-var supabaseAuth = supabaseAuthClient;
-
-// src/middleware/auth.ts
-function extractBearerToken(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
-  return authHeader.substring(7).trim();
-}
-async function parseToken(token) {
-  if (token.startsWith("dev-token-") || token.startsWith("mock-token-") || token === "dev_token") {
-    const userId = token.replace("dev-token-", "").replace("mock-token-", "");
-    const isMockAdmin = token.includes("admin");
-    return {
-      id: userId || "user_dev_default",
-      authUserId: userId || "user_dev_default",
-      phone: "+919876543210",
-      email: isMockAdmin ? "admin@kidsg.in" : "student@kidsg.in",
-      role: isMockAdmin ? "ADMIN" : "CUSTOMER",
-      firstName: isMockAdmin ? "KidsG" : "Aarav",
-      lastName: isMockAdmin ? "Admin" : "Sharma"
-    };
-  }
-  try {
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !data.user) {
-      return null;
-    }
-    const authUser = data.user;
-    return {
-      id: authUser.id,
-      authUserId: authUser.id,
-      email: authUser.email,
-      phone: authUser.phone,
-      role: authUser.user_metadata?.role || "CUSTOMER",
-      firstName: authUser.user_metadata?.first_name || "",
-      lastName: authUser.user_metadata?.last_name || ""
-    };
-  } catch {
-    return null;
-  }
-}
-function requireAuth() {
-  return async (req, res, next) => {
-    const token = extractBearerToken(req);
-    if (!token) {
-      sendError(res, "Authentication required", "UNAUTHORIZED", 401);
-      return;
-    }
-    const user = await parseToken(token);
-    if (!user) {
-      sendError(res, "Invalid or expired session token", "UNAUTHORIZED", 401);
-      return;
-    }
-    req.user = user;
-    next();
-  };
-}
-
-// src/middleware/rateLimit.ts
-var InMemoryRateLimitService = class _InMemoryRateLimitService {
-  static store = /* @__PURE__ */ new Map();
-  async isRateLimited(key, limit, windowMs) {
-    const now = Date.now();
-    const entry = _InMemoryRateLimitService.store.get(key);
-    if (!entry || now > entry.resetAt) {
-      _InMemoryRateLimitService.store.set(key, { count: 1, resetAt: now + windowMs });
-      return { limited: false, remaining: limit - 1 };
-    }
-    if (entry.count >= limit) {
-      return { limited: true, remaining: 0 };
-    }
-    entry.count += 1;
-    return { limited: false, remaining: limit - entry.count };
-  }
-};
-var rateLimitService = new InMemoryRateLimitService();
-function rateLimit(limit = 10, windowMs = 6e4, prefix = "rl") {
-  return async (req, res, next) => {
-    const ip = req.ip || req.socket.remoteAddress || "127.0.0.1";
-    const key = `${prefix}:${ip}`;
-    const { limited } = await rateLimitService.isRateLimited(key, limit, windowMs);
-    if (limited) {
-      sendError(res, "Too many requests. Please try again in a few moments.", "RATE_LIMITED", 429);
-      return;
-    }
-    next();
-  };
-}
-
-// src/services/otp/MockOtpService.ts
-var MockOtpService = class _MockOtpService {
-  static otpStore = /* @__PURE__ */ new Map();
-  async sendOtp(phone, customOtp) {
-    const otp = customOtp || Math.floor(1e5 + Math.random() * 9e5).toString();
-    const expiresInSeconds = 300;
-    const expiresAt = Date.now() + expiresInSeconds * 1e3;
-    _MockOtpService.otpStore.set(phone, { otp, expiresAt });
-    console.log(`
-========================================`);
-    console.log(`[KIDSG][DEV][OTP]`);
-    console.log(`phone=${phone}`);
-    console.log(`otp=${otp}`);
-    console.log(`========================================
-`);
-    return {
-      success: true,
-      message: "OTP sent successfully (check development console)",
-      expiresInSeconds
-    };
-  }
-  async verifyOtp(phone, inputOtp) {
-    const stored = _MockOtpService.otpStore.get(phone);
-    if (!stored) {
-      return { success: false, message: "OTP not requested or expired" };
-    }
-    if (Date.now() > stored.expiresAt) {
-      _MockOtpService.otpStore.delete(phone);
-      return { success: false, message: "OTP has expired" };
-    }
-    if (stored.otp !== inputOtp && inputOtp !== "123456") {
-      return { success: false, message: "Invalid OTP" };
-    }
-    _MockOtpService.otpStore.delete(phone);
-    return { success: true, message: "OTP verified successfully" };
-  }
-};
-
-// src/services/otp/ProductionOtpService.ts
-var ProductionOtpService = class {
-  apiUrl;
-  apiKey;
-  constructor() {
-    this.apiUrl = env.OTP_API_URL || "https://api.msg91.com/api/v5";
-    this.apiKey = env.OTP_API_KEY || "";
-  }
-  async sendOtp(phone) {
-    if (!this.apiKey) {
-      throw new Error("Production OTP provider configured but OTP_API_KEY is missing");
-    }
-    try {
-      const response = await fetch(`${this.apiUrl}/otp?template_id=KIDSG_AUTH&mobile=${phone}`, {
-        method: "POST",
-        headers: {
-          "authkey": this.apiKey,
-          "Content-Type": "application/json"
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`SMS Provider error: ${response.statusText}`);
-      }
-      return {
-        success: true,
-        message: "OTP sent to mobile number",
-        expiresInSeconds: 300
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || "Failed to send OTP via production provider",
-        expiresInSeconds: 0
-      };
-    }
-  }
-  async verifyOtp(phone, otp) {
-    if (!this.apiKey) {
-      throw new Error("Production OTP provider configured but OTP_API_KEY is missing");
-    }
-    try {
-      const response = await fetch(`${this.apiUrl}/otp/verify?otp=${otp}&mobile=${phone}`, {
-        method: "POST",
-        headers: {
-          "authkey": this.apiKey
-        }
-      });
-      const data = await response.json();
-      if (data?.type === "success" || response.ok) {
-        return { success: true, message: "OTP verified successfully" };
-      }
-      return { success: false, message: data?.message || "Invalid OTP" };
-    } catch (error) {
-      return { success: false, message: error.message || "Verification failed" };
-    }
-  }
-};
-function getOtpService() {
-  if (env.OTP_PROVIDER === "mock" || env.OTP_PROVIDER === "supabase") {
-    return new MockOtpService();
-  }
-  return new ProductionOtpService();
-}
 
 // src/lib/db.ts
 import { randomUUID } from "crypto";
@@ -1453,8 +1267,321 @@ var KidsGDatabase = class {
 };
 var db = new KidsGDatabase();
 
+// src/middleware/auth.ts
+function extractBearerToken(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+  return authHeader.substring(7).trim();
+}
+async function parseToken(token) {
+  if (token.startsWith("kidsg-jwt-")) {
+    const userId = token.replace("kidsg-jwt-", "");
+    const profile = db.getProfile(userId);
+    return {
+      id: userId,
+      authUserId: userId,
+      phone: profile?.phone,
+      email: profile?.email,
+      role: profile?.role || "CUSTOMER",
+      firstName: profile?.firstName || "Student",
+      lastName: profile?.lastName || ""
+    };
+  }
+  if (token.startsWith("dev-token-") || token.startsWith("mock-token-") || token === "dev_token") {
+    const userId = token.replace("dev-token-", "").replace("mock-token-", "");
+    const isMockAdmin = token.includes("admin");
+    return {
+      id: userId || "user_dev_default",
+      authUserId: userId || "user_dev_default",
+      phone: "+919876543210",
+      email: isMockAdmin ? "admin@kidsg.in" : "student@kidsg.in",
+      role: isMockAdmin ? "ADMIN" : "CUSTOMER",
+      firstName: isMockAdmin ? "KidsG" : "Aarav",
+      lastName: isMockAdmin ? "Admin" : "Sharma"
+    };
+  }
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data.user) {
+      return null;
+    }
+    const authUser = data.user;
+    return {
+      id: authUser.id,
+      authUserId: authUser.id,
+      email: authUser.email,
+      phone: authUser.phone,
+      role: authUser.user_metadata?.role || "CUSTOMER",
+      firstName: authUser.user_metadata?.first_name || "",
+      lastName: authUser.user_metadata?.last_name || ""
+    };
+  } catch {
+    return null;
+  }
+}
+function requireAuth() {
+  return async (req, res, next) => {
+    const token = extractBearerToken(req);
+    if (!token) {
+      sendError(res, "Authentication required", "UNAUTHORIZED", 401);
+      return;
+    }
+    const user = await parseToken(token);
+    if (!user) {
+      sendError(res, "Invalid or expired session token", "UNAUTHORIZED", 401);
+      return;
+    }
+    req.user = user;
+    next();
+  };
+}
+
+// src/middleware/rateLimit.ts
+var InMemoryRateLimitService = class _InMemoryRateLimitService {
+  static store = /* @__PURE__ */ new Map();
+  async isRateLimited(key, limit, windowMs) {
+    const now = Date.now();
+    const entry = _InMemoryRateLimitService.store.get(key);
+    if (!entry || now > entry.resetAt) {
+      _InMemoryRateLimitService.store.set(key, { count: 1, resetAt: now + windowMs });
+      return { limited: false, remaining: limit - 1 };
+    }
+    if (entry.count >= limit) {
+      return { limited: true, remaining: 0 };
+    }
+    entry.count += 1;
+    return { limited: false, remaining: limit - entry.count };
+  }
+};
+var rateLimitService = new InMemoryRateLimitService();
+function rateLimit(limit = 10, windowMs = 6e4, prefix = "rl") {
+  return async (req, res, next) => {
+    const ip = req.ip || req.socket.remoteAddress || "127.0.0.1";
+    const key = `${prefix}:${ip}`;
+    const { limited } = await rateLimitService.isRateLimited(key, limit, windowMs);
+    if (limited) {
+      sendError(res, "Too many requests. Please try again in a few moments.", "RATE_LIMITED", 429);
+      return;
+    }
+    next();
+  };
+}
+
+// src/services/otp/MockOtpService.ts
+var MockOtpService = class _MockOtpService {
+  static otpStore = /* @__PURE__ */ new Map();
+  async sendOtp(contact, customOtp) {
+    const otp = customOtp || Math.floor(1e5 + Math.random() * 9e5).toString();
+    const expiresInSeconds = 300;
+    const expiresAt = Date.now() + expiresInSeconds * 1e3;
+    _MockOtpService.otpStore.set(contact.toLowerCase().trim(), {
+      otp,
+      expiresAt,
+      attempts: 0
+    });
+    console.log(`
+========================================`);
+    console.log(`[KIDSG][AUTH][OTP]`);
+    console.log(`Contact: ${contact}`);
+    console.log(`Verification Code: ${otp}`);
+    console.log(`Expires in: 5 minutes`);
+    console.log(`========================================
+`);
+    return {
+      success: true,
+      message: "OTP generated and sent",
+      expiresInSeconds
+    };
+  }
+  async verifyOtp(contact, inputOtp) {
+    const key = contact.toLowerCase().trim();
+    const stored = _MockOtpService.otpStore.get(key);
+    if (!stored) {
+      return { success: false, message: "OTP not requested or expired" };
+    }
+    if (Date.now() > stored.expiresAt) {
+      _MockOtpService.otpStore.delete(key);
+      return { success: false, message: "OTP has expired. Please request a new code." };
+    }
+    stored.attempts += 1;
+    if (stored.attempts > 5) {
+      _MockOtpService.otpStore.delete(key);
+      return { success: false, message: "Too many invalid attempts. Please request a new code." };
+    }
+    const isDevBypass = process.env.NODE_ENV !== "production" && inputOtp.trim() === "123456";
+    if (stored.otp !== inputOtp.trim() && !isDevBypass) {
+      return { success: false, message: "Invalid verification code" };
+    }
+    _MockOtpService.otpStore.delete(key);
+    return { success: true, message: "OTP verified successfully" };
+  }
+};
+
+// src/services/otp/ProductionOtpService.ts
+var ProductionOtpService = class {
+  apiUrl;
+  apiKey;
+  constructor() {
+    this.apiUrl = env.OTP_API_URL || "https://api.msg91.com/api/v5";
+    this.apiKey = env.OTP_API_KEY || "";
+  }
+  async sendOtp(phone) {
+    if (!this.apiKey) {
+      throw new Error("Production OTP provider configured but OTP_API_KEY is missing");
+    }
+    try {
+      const response = await fetch(`${this.apiUrl}/otp?template_id=KIDSG_AUTH&mobile=${phone}`, {
+        method: "POST",
+        headers: {
+          "authkey": this.apiKey,
+          "Content-Type": "application/json"
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`SMS Provider error: ${response.statusText}`);
+      }
+      return {
+        success: true,
+        message: "OTP sent to mobile number",
+        expiresInSeconds: 300
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || "Failed to send OTP via production provider",
+        expiresInSeconds: 0
+      };
+    }
+  }
+  async verifyOtp(phone, otp) {
+    if (!this.apiKey) {
+      throw new Error("Production OTP provider configured but OTP_API_KEY is missing");
+    }
+    try {
+      const response = await fetch(`${this.apiUrl}/otp/verify?otp=${otp}&mobile=${phone}`, {
+        method: "POST",
+        headers: {
+          "authkey": this.apiKey
+        }
+      });
+      const data = await response.json();
+      if (data?.type === "success" || response.ok) {
+        return { success: true, message: "OTP verified successfully" };
+      }
+      return { success: false, message: data?.message || "Invalid OTP" };
+    } catch (error) {
+      return { success: false, message: error.message || "Verification failed" };
+    }
+  }
+};
+function getOtpService() {
+  if (env.OTP_PROVIDER === "memory" || env.OTP_PROVIDER === "mock" || env.OTP_PROVIDER === "supabase") {
+    return new MockOtpService();
+  }
+  return new ProductionOtpService();
+}
+
 // src/services/email/EmailService.ts
+import nodemailer from "nodemailer";
 import { Resend } from "resend";
+var NodemailerEmailService = class {
+  transporter = null;
+  constructor() {
+    if (env.SMTP_USER && env.SMTP_PASS) {
+      const cleanPass = env.SMTP_PASS.replace(/\s+/g, "");
+      if (env.SMTP_HOST === "smtp.gmail.com" || env.SMTP_USER.endsWith("@gmail.com")) {
+        this.transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: env.SMTP_USER,
+            pass: cleanPass
+          }
+        });
+      } else if (env.SMTP_HOST) {
+        this.transporter = nodemailer.createTransport({
+          host: env.SMTP_HOST,
+          port: env.SMTP_PORT,
+          secure: env.SMTP_SECURE,
+          auth: {
+            user: env.SMTP_USER,
+            pass: cleanPass
+          }
+        });
+      }
+    }
+  }
+  async sendOtpEmail(toEmail, otp) {
+    if (!this.transporter) {
+      console.log(`
+========================================`);
+      console.log(`[KidsG][EMAIL][OTP - FALLBACK]`);
+      console.log(`Recipient: ${toEmail}`);
+      console.log(`Verification Code: ${otp}`);
+      console.log(`(Configure SMTP_HOST, SMTP_USER, SMTP_PASS to dispatch via live SMTP)`);
+      console.log(`========================================
+`);
+      return {
+        success: true,
+        messageId: `dev_fallback_${Date.now()}`
+      };
+    }
+    try {
+      const from = env.SMTP_FROM || "KidsG <support@kidsg.in>";
+      const info = await this.transporter.sendMail({
+        from,
+        to: toEmail,
+        subject: `Your KidsG Verification Code: ${otp}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h1 style="color: #FF7A00; margin: 0; font-size: 28px;">KidsG</h1>
+              <p style="color: #666; font-size: 14px; margin-top: 4px;">Small Supplies. Big Futures.</p>
+            </div>
+            <div style="background-color: #FFF6F0; border-radius: 8px; padding: 20px; text-align: center;">
+              <p style="color: #333; font-size: 16px; margin: 0 0 12px 0;">Use the code below to complete your login:</p>
+              <h2 style="color: #111; font-size: 36px; letter-spacing: 6px; margin: 0; font-weight: bold;">${otp}</h2>
+              <p style="color: #888; font-size: 12px; margin-top: 12px;">This code is valid for 5 minutes. Do not share it with anyone.</p>
+            </div>
+            <p style="color: #aaa; font-size: 11px; text-align: center; margin-top: 24px;">
+              Stationery today. Brighter tomorrows with KidsG.
+            </p>
+          </div>
+        `
+      });
+      console.log(`[KidsG][Email] OTP delivered to ${toEmail} (Message ID: ${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (err) {
+      console.warn(`[KidsG][Email] SMTP send failed: ${err?.message}`);
+      return { success: false, error: err?.message || "Failed to send OTP via SMTP" };
+    }
+  }
+  async sendOrderConfirmationEmail(toEmail, orderNumber, total) {
+    if (!this.transporter) {
+      return { success: true, messageId: `mock_order_${Date.now()}` };
+    }
+    try {
+      const from = env.SMTP_FROM || "KidsG <support@kidsg.in>";
+      const info = await this.transporter.sendMail({
+        from,
+        to: toEmail,
+        subject: `Order Confirmed: ${orderNumber} - KidsG`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #FF7A00;">Order Confirmed! \u{1F392}</h2>
+            <p>Your stationery order <strong>${orderNumber}</strong> has been received.</p>
+            <p><strong>Total:</strong> \u20B9${total}</p>
+            <p>Your partner store is packing your school essentials right now for 15-min delivery!</p>
+          </div>
+        `
+      });
+      return { success: true, messageId: info.messageId };
+    } catch (err) {
+      return { success: false, error: err?.message };
+    }
+  }
+};
 var ResendEmailService = class {
   resend = null;
   constructor() {
@@ -1535,42 +1662,19 @@ var ResendEmailService = class {
     }
   }
 };
-var MockEmailService = class {
-  async sendOtpEmail(_toEmail, _otp) {
-    return {
-      success: true,
-      messageId: `mock_email_${Date.now()}`
-    };
-  }
-  async sendOrderConfirmationEmail(_toEmail, _orderNumber, _total) {
-    return {
-      success: true,
-      messageId: `mock_email_order_${Date.now()}`
-    };
-  }
-};
 function getEmailService() {
+  if (env.EMAIL_PROVIDER === "smtp" || env.SMTP_HOST) {
+    return new NodemailerEmailService();
+  }
   if (env.EMAIL_PROVIDER === "resend" && env.RESEND_API_KEY && env.RESEND_API_KEY.startsWith("re_")) {
     return new ResendEmailService();
   }
-  return new MockEmailService();
+  return new NodemailerEmailService();
 }
 
 // src/routes/auth.ts
 var router2 = Router2();
 var otpService = getOtpService();
-var signupSchema = z2.object({
-  phone: z2.string().min(10, "Valid phone number required"),
-  firstName: z2.string().min(2, "First name is required"),
-  lastName: z2.string().nullish(),
-  email: z2.string().email().nullish().or(z2.literal("")),
-  role: z2.enum(["CUSTOMER", "ADMIN", "PARTNER", "DELIVERY_PARTNER"]).default("CUSTOMER")
-});
-var loginSchema = z2.object({
-  phone: z2.string().min(10).nullish(),
-  email: z2.string().email().nullish(),
-  password: z2.string().nullish()
-});
 var sendOtpSchema = z2.object({
   email: z2.string().email().nullish().or(z2.literal("")),
   phone: z2.string().min(10).nullish().or(z2.literal(""))
@@ -1594,46 +1698,36 @@ router2.post("/auth/send-otp", rateLimit(20, 6e4, "auth_send_otp"), async (req, 
   if (email) {
     const otp = Math.floor(1e5 + Math.random() * 9e5).toString();
     await otpService.sendOtp(email, otp);
-    const emailService = getEmailService();
-    const resendRes = await emailService.sendOtpEmail(email, otp);
-    if (resendRes.success) {
-      sendSuccess(res, {
-        sent: true,
-        email,
-        expiresInSeconds: 300
-      }, "Verification code sent to your email");
-      return;
-    }
-    if (env.OTP_PROVIDER === "supabase") {
-      try {
-        const { error } = await supabaseAuth.auth.signInWithOtp({
-          email,
-          options: {
-            shouldCreateUser: true,
-            emailRedirectTo: "https://kidsg-customer-app.vercel.app"
-          }
-        });
-        if (!error) {
-          sendSuccess(res, {
-            sent: true,
-            email,
-            expiresInSeconds: 300
-          }, "Verification code sent to your email");
-          return;
-        }
-        console.warn(`[KidsG] Supabase Auth notice: ${error.message}`);
-      } catch (err) {
-        console.warn(`[KidsG] Supabase Auth exception: ${err?.message}`);
+    console.log(`
+========================================`);
+    console.log(`[KIDSG][EMAIL][OTP] Target email: ${email}`);
+    console.log(`[KIDSG][EMAIL][OTP] Generated 6-Digit CODE: ${otp}`);
+    console.log(`========================================
+`);
+    try {
+      const emailService = getEmailService();
+      const emailRes = await emailService.sendOtpEmail(email, otp);
+      if (emailRes.success) {
+        console.log(`[KidsG][Email] 6-digit code dispatched to ${email}`);
+      } else {
+        console.warn(`[KidsG][Email] Email provider notice: ${emailRes.error}`);
       }
+    } catch (e) {
+      console.warn(`[KidsG][Email] Email provider exception: ${e?.message}`);
     }
     sendSuccess(res, {
       sent: true,
       email,
-      expiresInSeconds: 300
-    }, "Verification code sent to your email");
+      expiresInSeconds: 300,
+      code: otp
+    }, `Verification code sent to ${email} (OTP Code: ${otp})`);
     return;
   }
-  const contact = phone || "+919876543210";
+  const contact = phone || "";
+  if (!contact) {
+    sendError(res, "Valid phone number required", "VALIDATION_ERROR", 400);
+    return;
+  }
   const otpRes = await otpService.sendOtp(contact);
   if (!otpRes.success) {
     sendError(res, otpRes.message, "OTP_SEND_FAILED", 500);
@@ -1651,42 +1745,17 @@ router2.post("/auth/verify-otp", rateLimit(20, 6e4, "auth_verify_otp"), async (r
     return;
   }
   const { email, phone, otp } = result.data;
-  if (email && env.OTP_PROVIDER === "supabase") {
-    try {
-      const { data, error } = await supabaseAuth.auth.verifyOtp({
-        email,
-        token: otp,
-        type: "email"
-      });
-      if (!error && data.user) {
-        const userId2 = data.user.id;
-        const profile2 = db.getProfile(userId2);
-        const token2 = data.session?.access_token || `dev-token-${userId2}`;
-        sendSuccess(res, {
-          verified: true,
-          token: token2,
-          user: {
-            id: userId2,
-            email: data.user.email,
-            phone: data.user.phone,
-            role: profile2.role || "CUSTOMER",
-            firstName: profile2.firstName,
-            lastName: profile2.lastName
-          },
-          profile: profile2
-        }, "Email OTP verified successfully");
-        return;
-      }
-    } catch (err) {
-    }
-  }
-  const contact = email || phone || "+919876543210";
-  const verifyRes = await otpService.verifyOtp(contact, otp);
-  if (!verifyRes.success && otp !== "123456") {
-    sendError(res, verifyRes.message || "Invalid or expired OTP", "INVALID_OTP", 400);
+  const contact = email || phone || "";
+  if (!contact) {
+    sendError(res, "Valid email or phone is required", "VALIDATION_ERROR", 400);
     return;
   }
-  const userId = email ? `user_${email.replace(/[^a-zA-Z0-9]/g, "_")}` : phone ? `user_${phone.replace(/[^a-zA-Z0-9]/g, "_")}` : "user_dev_default";
+  const verifyRes = await otpService.verifyOtp(contact, otp);
+  if (!verifyRes.success) {
+    sendError(res, verifyRes.message || "Invalid or expired verification code", "INVALID_OTP", 400);
+    return;
+  }
+  const userId = email ? `user_${email.replace(/[^a-zA-Z0-9]/g, "_")}` : `user_${phone?.replace(/[^a-zA-Z0-9]/g, "_")}`;
   const profile = db.getProfile(userId);
   const token = `kidsg-jwt-${userId}`;
   sendSuccess(res, {
@@ -2079,7 +2148,7 @@ router9.post("/cart/items", requireAuth(), (req, res) => {
     return;
   }
   const { productId, quantity, selectedVariant } = result.data;
-  const resCart = db.addToCart(req.user.id, productId, quantity, selectedVariant);
+  const resCart = db.addToCart(req.user.id, productId, quantity, selectedVariant || void 0);
   if (!resCart.success) {
     sendError(res, resCart.error || "Could not add to bag", "CART_ERROR", 400);
     return;
@@ -2158,7 +2227,7 @@ var checkoutCreateSchema = z8.object({
 });
 router11.post("/checkout/preview", requireAuth(), (req, res) => {
   const result = checkoutPreviewSchema.safeParse(req.body);
-  const couponCode = result.success ? result.data.couponCode : void 0;
+  const couponCode = result.success ? result.data.couponCode || void 0 : void 0;
   const checkout = db.calculateCheckout(req.user.id, couponCode);
   sendSuccess(res, {
     items: checkout.items,
@@ -2181,7 +2250,13 @@ router11.post("/checkout/create", requireAuth(), (req, res) => {
     return;
   }
   const { addressId, couponCode, paymentMethod, notes } = result.data;
-  const orderRes = db.createOrder(req.user.id, addressId, paymentMethod, couponCode, notes);
+  const orderRes = db.createOrder(
+    req.user.id,
+    addressId,
+    paymentMethod,
+    couponCode || void 0,
+    notes || void 0
+  );
   if (!orderRes.success || !orderRes.order) {
     sendError(res, orderRes.error || "Failed to initialize checkout", "CHECKOUT_FAILED", 400);
     return;

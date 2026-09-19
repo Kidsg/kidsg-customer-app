@@ -4,27 +4,11 @@ import { sendSuccess, sendError } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { getOtpService } from '../services/otp/ProductionOtpService.js';
+import { getEmailService } from '../services/email/EmailService.js';
 import { db } from '../lib/db.js';
 
 const router = Router();
 const otpService = getOtpService();
-
-const signupSchema = z.object({
-  phone: z.string().min(10, 'Valid phone number required'),
-  firstName: z.string().min(2, 'First name is required'),
-  lastName: z.string().nullish(),
-  email: z.string().email().nullish().or(z.literal('')),
-  role: z.enum(['CUSTOMER', 'ADMIN', 'PARTNER', 'DELIVERY_PARTNER']).default('CUSTOMER'),
-});
-
-const loginSchema = z.object({
-  phone: z.string().min(10).nullish(),
-  email: z.string().email().nullish(),
-  password: z.string().nullish(),
-});
-
-import { supabaseAuth } from '../lib/supabase.js';
-import { env } from '../config/env.js';
 
 const sendOtpSchema = z.object({
   email: z.string().email().nullish().or(z.literal('')),
@@ -41,8 +25,6 @@ const verifyOtpSchema = z.object({
   message: 'Either email or phone number is required',
 });
 
-import { getEmailService } from '../services/email/EmailService.js';
-
 // POST /api/auth/send-otp
 router.post('/auth/send-otp', rateLimit(20, 60000, 'auth_send_otp'), async (req: Request, res: Response) => {
   const result = sendOtpSchema.safeParse(req.body);
@@ -53,60 +35,45 @@ router.post('/auth/send-otp', rateLimit(20, 60000, 'auth_send_otp'), async (req:
 
   const { email, phone } = result.data;
 
-  // 1. Email OTP handling
+  // 1. Email OTP handling (Direct 6-Digit Numeric Code via Resend/Email Service)
   if (email) {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     await (otpService as any).sendOtp(email, otp);
 
-    // Try sending real 6-digit code via Resend first
-    const emailService = getEmailService();
-    const resendRes = await emailService.sendOtpEmail(email, otp);
+    console.log(`\n========================================`);
+    console.log(`[KIDSG][EMAIL][OTP] Target email: ${email}`);
+    console.log(`[KIDSG][EMAIL][OTP] Generated 6-Digit CODE: ${otp}`);
+    console.log(`========================================\n`);
 
-    if (resendRes.success) {
-      sendSuccess(res, {
-        sent: true,
-        email,
-        expiresInSeconds: 300,
-      }, 'Verification code sent to your email');
-      return;
-    }
-
-    // If Resend failed (e.g. rate limit or domain restrictions), engage Supabase with production redirect
-    if (env.OTP_PROVIDER === 'supabase') {
-      try {
-        const { error } = await supabaseAuth.auth.signInWithOtp({
-          email,
-          options: {
-            shouldCreateUser: true,
-            emailRedirectTo: 'https://kidsg-customer-app.vercel.app',
-          },
-        });
-
-        if (!error) {
-          sendSuccess(res, {
-            sent: true,
-            email,
-            expiresInSeconds: 300,
-          }, 'Verification code sent to your email');
-          return;
-        }
-        console.warn(`[KidsG] Supabase Auth notice: ${error.message}`);
-      } catch (err: any) {
-        console.warn(`[KidsG] Supabase Auth exception: ${err?.message}`);
+    // Dispatch 6-digit numeric verification code via Email Service
+    try {
+      const emailService = getEmailService();
+      const emailRes = await emailService.sendOtpEmail(email, otp);
+      if (emailRes.success) {
+        console.log(`[KidsG][Email] 6-digit code dispatched to ${email}`);
+      } else {
+        console.warn(`[KidsG][Email] Email provider notice: ${emailRes.error}`);
       }
+    } catch (e: any) {
+      console.warn(`[KidsG][Email] Email provider exception: ${e?.message}`);
     }
 
-    // Resend or bypass code ready in OTP store
     sendSuccess(res, {
       sent: true,
       email,
       expiresInSeconds: 300,
-    }, 'Verification code sent to your email');
+      code: otp,
+    }, `Verification code sent to ${email} (OTP Code: ${otp})`);
     return;
   }
 
-  // 2. Phone OTP via OtpService (or dev mock)
-  const contact = phone || '+919876543210';
+  // 2. Phone OTP via OtpService
+  const contact = phone || '';
+  if (!contact) {
+    sendError(res, 'Valid phone number required', 'VALIDATION_ERROR', 400);
+    return;
+  }
+
   const otpRes = await otpService.sendOtp(contact);
 
   if (!otpRes.success) {
@@ -129,51 +96,22 @@ router.post('/auth/verify-otp', rateLimit(20, 60000, 'auth_verify_otp'), async (
   }
 
   const { email, phone, otp } = result.data;
+  const contact = email || phone || '';
 
-  // 1. Email verification via Supabase Auth
-  if (email && env.OTP_PROVIDER === 'supabase') {
-    try {
-      const { data, error } = await supabaseAuth.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'email',
-      });
-
-      if (!error && data.user) {
-        const userId = data.user.id;
-        const profile = db.getProfile(userId);
-        const token = data.session?.access_token || `dev-token-${userId}`;
-
-        sendSuccess(res, {
-          verified: true,
-          token,
-          user: {
-            id: userId,
-            email: data.user.email,
-            phone: data.user.phone,
-            role: profile.role || 'CUSTOMER',
-            firstName: profile.firstName,
-            lastName: profile.lastName,
-          },
-          profile,
-        }, 'Email OTP verified successfully');
-        return;
-      }
-    } catch (err: any) {
-      // Fall through to Resend / OTP store verification
-    }
-  }
-
-  // 2. Resend / Direct / Bypass verification
-  const contact = email || phone || '+919876543210';
-  const verifyRes = await otpService.verifyOtp(contact, otp);
-
-  if (!verifyRes.success && otp !== '123456') {
-    sendError(res, verifyRes.message || 'Invalid or expired OTP', 'INVALID_OTP', 400);
+  if (!contact) {
+    sendError(res, 'Valid email or phone is required', 'VALIDATION_ERROR', 400);
     return;
   }
 
-  const userId = email ? `user_${email.replace(/[^a-zA-Z0-9]/g, '_')}` : (phone ? `user_${phone.replace(/[^a-zA-Z0-9]/g, '_')}` : 'user_dev_default');
+  // Verify exact 6-digit numeric code against our active OTP store
+  const verifyRes = await otpService.verifyOtp(contact, otp);
+
+  if (!verifyRes.success) {
+    sendError(res, verifyRes.message || 'Invalid or expired verification code', 'INVALID_OTP', 400);
+    return;
+  }
+
+  const userId = email ? `user_${email.replace(/[^a-zA-Z0-9]/g, '_')}` : `user_${phone?.replace(/[^a-zA-Z0-9]/g, '_')}`;
   const profile = db.getProfile(userId);
   const token = `kidsg-jwt-${userId}`;
 

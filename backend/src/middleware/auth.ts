@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendError } from '../lib/response.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { db } from '../lib/db.js';
 
 export type UserRole = 'CUSTOMER' | 'ADMIN' | 'PARTNER' | 'DELIVERY_PARTNER';
 
@@ -31,7 +32,22 @@ export function extractBearerToken(req: Request): string | null {
 }
 
 export async function parseToken(token: string): Promise<AuthenticatedUser | null> {
-  // 1. Development & Mock Tokens
+  // 1. KidsG Session Tokens
+  if (token.startsWith('kidsg-jwt-')) {
+    const userId = token.replace('kidsg-jwt-', '');
+    const profile = db.getProfile(userId);
+    return {
+      id: userId,
+      authUserId: userId,
+      phone: profile?.phone,
+      email: profile?.email,
+      role: (profile?.role as UserRole) || 'CUSTOMER',
+      firstName: profile?.firstName || 'Student',
+      lastName: profile?.lastName || '',
+    };
+  }
+
+  // 2. Development & Mock Tokens
   if (token.startsWith('dev-token-') || token.startsWith('mock-token-') || token === 'dev_token') {
     const userId = token.replace('dev-token-', '').replace('mock-token-', '');
     const isMockAdmin = token.includes('admin');

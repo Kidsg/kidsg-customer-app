@@ -31,7 +31,7 @@ router.post('/cart/items', requireAuth(), (req: Request, res: Response) => {
   }
 
   const { productId, quantity, selectedVariant } = result.data;
-  const resCart = db.addToCart(req.user!.id, productId, quantity, selectedVariant);
+  const resCart = db.addToCart(req.user!.id, productId, quantity, selectedVariant || undefined);
 
   if (!resCart.success) {
     sendError(res, resCart.error || 'Could not add to bag', 'CART_ERROR', 400);

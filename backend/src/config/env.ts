@@ -20,14 +20,21 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().default(''),
   JWT_SECRET: z.string().default('kidsg_development_jwt_secret_must_be_changed_in_prod'),
 
-  // Email & Resend
-  EMAIL_PROVIDER: z.enum(['resend', 'mock']).default('resend'),
+  // Email & Providers (SMTP / Resend / Mock)
+  EMAIL_PROVIDER: z.enum(['smtp', 'resend', 'mock']).default('smtp'),
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_USER: z.string().default('buildingwithkidsg@gmail.com'),
+  SMTP_PASS: z.string().default('dykzeeyqtkkpzhlr'),
+  SMTP_FROM: z.string().default('KidsG <buildingwithkidsg@gmail.com>'),
+
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().default('REPLACE_ME'),
   RESEND_FROM_NAME: z.string().default('KidsG'),
 
   // Providers
-  OTP_PROVIDER: z.enum(['supabase', 'mock', 'msg91', 'twilio', 'twofactor']).default('supabase'),
+  OTP_PROVIDER: z.enum(['memory', 'mock', 'supabase', 'msg91', 'twilio', 'twofactor']).default('memory'),
   OTP_API_URL: z.string().optional(),
   OTP_API_KEY: z.string().optional(),
 
