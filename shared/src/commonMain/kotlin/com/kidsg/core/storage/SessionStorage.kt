@@ -16,18 +16,18 @@ object SessionStorage {
     }
 
     fun getAuthToken(): String? {
-        return PlatformStorage.getString(KEY_AUTH_TOKEN)
+        return platformGetString(KEY_AUTH_TOKEN)
     }
 
     fun saveAuthToken(token: String?) {
-        PlatformStorage.putString(KEY_AUTH_TOKEN, token)
+        platformPutString(KEY_AUTH_TOKEN, token)
         if (token != null) {
-            PlatformStorage.putString(KEY_IS_LOGGED_IN, "true")
+            platformPutString(KEY_IS_LOGGED_IN, "true")
         }
     }
 
     fun getUserProfile(): UserProfile? {
-        val raw = PlatformStorage.getString(KEY_USER_PROFILE) ?: return null
+        val raw = platformGetString(KEY_USER_PROFILE) ?: return null
         return try {
             json.decodeFromString<UserProfile>(raw)
         } catch (_: Exception) {
@@ -37,58 +37,58 @@ object SessionStorage {
 
     fun saveUserProfile(profile: UserProfile?) {
         if (profile == null) {
-            PlatformStorage.remove(KEY_USER_PROFILE)
+            platformRemove(KEY_USER_PROFILE)
         } else {
             try {
                 val raw = json.encodeToString(UserProfile.serializer(), profile)
-                PlatformStorage.putString(KEY_USER_PROFILE, raw)
-                PlatformStorage.putString(KEY_IS_LOGGED_IN, "true")
+                platformPutString(KEY_USER_PROFILE, raw)
+                platformPutString(KEY_IS_LOGGED_IN, "true")
             } catch (_: Exception) {
             }
         }
     }
 
     fun isLoggedIn(): Boolean {
-        return PlatformStorage.getString(KEY_IS_LOGGED_IN) == "true" && getUserProfile() != null
+        return platformGetString(KEY_IS_LOGGED_IN) == "true" && getUserProfile() != null
     }
 
     fun isOnboardingCompleted(): Boolean {
-        return PlatformStorage.getString(KEY_ONBOARDING_COMPLETED) == "true"
+        return platformGetString(KEY_ONBOARDING_COMPLETED) == "true"
     }
 
     private const val KEY_SELECTED_CHARACTER = "kidsg_selected_character"
 
     fun getSelectedCharacter(): String? {
-        return PlatformStorage.getString(KEY_SELECTED_CHARACTER)
+        return platformGetString(KEY_SELECTED_CHARACTER)
     }
 
     fun saveSelectedCharacter(character: String?) {
         if (character != null) {
-            PlatformStorage.putString(KEY_SELECTED_CHARACTER, character)
+            platformPutString(KEY_SELECTED_CHARACTER, character)
         } else {
-            PlatformStorage.remove(KEY_SELECTED_CHARACTER)
+            platformRemove(KEY_SELECTED_CHARACTER)
         }
     }
 
     private const val KEY_CURRENT_LOCATION = "kidsg_current_location"
 
     fun getCurrentLocation(): String? {
-        return PlatformStorage.getString(KEY_CURRENT_LOCATION)
+        return platformGetString(KEY_CURRENT_LOCATION)
     }
 
     fun saveCurrentLocation(location: String?) {
         if (location != null) {
-            PlatformStorage.putString(KEY_CURRENT_LOCATION, location)
+            platformPutString(KEY_CURRENT_LOCATION, location)
         } else {
-            PlatformStorage.remove(KEY_CURRENT_LOCATION)
+            platformRemove(KEY_CURRENT_LOCATION)
         }
     }
 
     fun setOnboardingCompleted(completed: Boolean) {
         if (completed) {
-            PlatformStorage.putString(KEY_ONBOARDING_COMPLETED, "true")
+            platformPutString(KEY_ONBOARDING_COMPLETED, "true")
         } else {
-            PlatformStorage.remove(KEY_ONBOARDING_COMPLETED)
+            platformRemove(KEY_ONBOARDING_COMPLETED)
         }
     }
 
@@ -113,7 +113,7 @@ object SessionStorage {
     private const val KEY_SAVED_ORDERS = "kidsg_saved_orders"
 
     fun getAccounts(): Map<String, AccountRecord> {
-        val raw = PlatformStorage.getString(KEY_ACCOUNTS_MAP) ?: return emptyMap()
+        val raw = platformGetString(KEY_ACCOUNTS_MAP) ?: return emptyMap()
         return try {
             json.decodeFromString<AccountsWrapper>(raw).accounts
         } catch (_: Exception) {
@@ -126,7 +126,7 @@ object SessionStorage {
         current[account.email.trim().lowercase()] = account
         try {
             val raw = json.encodeToString(AccountsWrapper.serializer(), AccountsWrapper(current))
-            PlatformStorage.putString(KEY_ACCOUNTS_MAP, raw)
+            platformPutString(KEY_ACCOUNTS_MAP, raw)
         } catch (_: Exception) {
         }
     }
@@ -136,7 +136,7 @@ object SessionStorage {
     }
 
     fun getSavedOrders(): List<com.kidsg.domain.model.Order> {
-        val raw = PlatformStorage.getString(KEY_SAVED_ORDERS) ?: return emptyList()
+        val raw = platformGetString(KEY_SAVED_ORDERS) ?: return emptyList()
         return try {
             json.decodeFromString<OrdersWrapper>(raw).orders
         } catch (_: Exception) {
@@ -147,7 +147,7 @@ object SessionStorage {
     fun saveOrders(orders: List<com.kidsg.domain.model.Order>) {
         try {
             val raw = json.encodeToString(OrdersWrapper.serializer(), OrdersWrapper(orders))
-            PlatformStorage.putString(KEY_SAVED_ORDERS, raw)
+            platformPutString(KEY_SAVED_ORDERS, raw)
         } catch (_: Exception) {
         }
     }
@@ -161,20 +161,20 @@ object SessionStorage {
 
     fun savePendingPassword(password: String?) {
         if (password != null) {
-            PlatformStorage.putString(KEY_PENDING_PASSWORD, password)
+            platformPutString(KEY_PENDING_PASSWORD, password)
         } else {
-            PlatformStorage.remove(KEY_PENDING_PASSWORD)
+            platformRemove(KEY_PENDING_PASSWORD)
         }
     }
 
     fun getPendingPassword(): String? {
-        return PlatformStorage.getString(KEY_PENDING_PASSWORD)
+        return platformGetString(KEY_PENDING_PASSWORD)
     }
 
     fun clearSession() {
-        PlatformStorage.remove(KEY_AUTH_TOKEN)
-        PlatformStorage.remove(KEY_USER_PROFILE)
-        PlatformStorage.remove(KEY_IS_LOGGED_IN)
-        PlatformStorage.remove(KEY_PENDING_PASSWORD)
+        platformRemove(KEY_AUTH_TOKEN)
+        platformRemove(KEY_USER_PROFILE)
+        platformRemove(KEY_IS_LOGGED_IN)
+        platformRemove(KEY_PENDING_PASSWORD)
     }
 }

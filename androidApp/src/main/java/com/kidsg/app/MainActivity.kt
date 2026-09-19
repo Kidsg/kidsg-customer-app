@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import com.kidsg.core.storage.PlatformStorage
 import com.kidsg.feature.app.KidsGApp
 
 class MainActivity : ComponentActivity() {
@@ -18,7 +17,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        PlatformStorage.init(this)
 
         // Every time entering app: fetch user's live location & request permission if needed
         LiveLocationHelper.checkAndRequestLocation(this, lifecycleScope) { resolvedLoc ->

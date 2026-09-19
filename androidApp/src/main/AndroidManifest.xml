@@ -26,6 +26,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <provider
+            android:name="com.kidsg.core.storage.KidsGStorageProvider"
+            android:authorities="${applicationId}.kidsgstorageprovider"
+            android:exported="false"
+            android:initOrder="100" />
     </application>
 
 </manifest>
