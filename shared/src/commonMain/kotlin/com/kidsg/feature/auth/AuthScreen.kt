@@ -41,7 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -98,10 +101,18 @@ fun AuthScreen(
     var infoMessage by remember { mutableStateOf<String?>(null) }
     var countdownSeconds by remember { mutableStateOf(30) }
 
+    val otpFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     // Resend countdown timer
     LaunchedEffect(isOtpSent) {
         if (isOtpSent) {
             countdownSeconds = 30
+            delay(150)
+            try {
+                otpFocusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {}
             while (countdownSeconds > 0) {
                 delay(1000)
                 countdownSeconds -= 1
@@ -289,46 +300,78 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // 6-digit OTP input boxes
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    (0 until 6).forEach { index ->
-                        val char = otpInput.getOrNull(index)?.toString() ?: ""
-                        val isFocused = otpInput.length == index || (index == 5 && otpInput.length == 6)
-
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(KidsGColors.White)
-                                .border(
-                                    width = if (isFocused) 2.dp else 1.dp,
-                                    color = if (isFocused) KidsGColors.OrangePrimary else KidsGColors.BorderSubtle,
-                                    shape = RoundedCornerShape(12.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = char,
-                                style = KidsGTypography.TitleLarge.copy(
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = KidsGColors.BlackText
-                                )
-                            )
-                        }
-                    }
-                }
-
-                // Invisible keyboard capture for smooth 6-digit typing
+                // 6-digit OTP input using BasicTextField with decorationBox for full touch target
                 BasicTextField(
                     value = otpInput,
-                    onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) otpInput = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { }),
-                    modifier = Modifier.size(1.dp)
+                    onValueChange = { newValue ->
+                        val digitsOnly = newValue.filter { it.isDigit() }
+                        if (digitsOnly.length <= 6) {
+                            otpInput = digitsOnly
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { keyboardController?.hide() }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(otpFocusRequester),
+                    decorationBox = {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    otpFocusRequester.requestFocus()
+                                    keyboardController?.show()
+                                },
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            (0 until 6).forEach { index ->
+                                val char = otpInput.getOrNull(index)?.toString() ?: ""
+                                val isCurrent = otpInput.length == index || (index == 5 && otpInput.length == 6)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(KidsGColors.White)
+                                        .border(
+                                            width = if (isCurrent) 2.dp else 1.dp,
+                                            color = if (isCurrent) KidsGColors.OrangePrimary else KidsGColors.BorderSubtle,
+                                            shape = RoundedCornerShape(12.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = char,
+                                        style = KidsGTypography.TitleLarge.copy(
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = KidsGColors.BlackText
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+
+                Text(
+                    text = "Tap to enter the 6-digit verification code",
+                    style = KidsGTypography.BodySmall.copy(
+                        color = KidsGColors.TextMuted,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    ),
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .clickable {
+                            otpFocusRequester.requestFocus()
+                            keyboardController?.show()
+                        }
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
