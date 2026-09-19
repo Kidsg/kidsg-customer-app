@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { sendSuccess, sendError } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { db } from '../lib/db.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 
 const router = Router();
 
@@ -30,6 +31,25 @@ router.patch('/profile', requireAuth(), (req: Request, res: Response) => {
   }
 
   const updated = db.updateProfile(req.user!.id, result.data);
+
+  // Sync to Supabase PostgreSQL table 'profiles' if configured
+  try {
+    const userEmail = updated.email || req.user?.email;
+    if (userEmail) {
+      supabaseAdmin.from('profiles').upsert({
+        email: userEmail,
+        first_name: updated.firstName || 'Student',
+        last_name: updated.lastName || '',
+        onboarding_completed: updated.onboardingCompleted ?? true,
+        selected_class: updated.selectedClass,
+        selected_school: updated.selectedSchool,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'email' }).catch(e => console.warn('[KidsG][Supabase] Profile sync warning:', e?.message));
+    }
+  } catch (e: any) {
+    console.warn('[KidsG][Supabase] Profile sync warning:', e?.message);
+  }
+
   sendSuccess(res, updated, 'Profile updated successfully');
 });
 

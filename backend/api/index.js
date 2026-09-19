@@ -1835,6 +1835,23 @@ router3.post("/onboarding/complete", requireAuth(), (req, res) => {
     selectedSchool,
     onboardingCompleted: true
   });
+  try {
+    const userEmail = req.user?.email;
+    if (userEmail) {
+      const nameParts = (req.user?.name || "Student User").split(" ");
+      supabaseAdmin.from("profiles").upsert({
+        email: userEmail,
+        first_name: nameParts[0] || "Student",
+        last_name: nameParts.slice(1).join(" ") || "",
+        onboarding_completed: true,
+        selected_class: selectedClass,
+        selected_school: selectedSchool,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }, { onConflict: "email" }).catch((e) => console.warn("[KidsG][Supabase] Profile sync notice:", e?.message));
+    }
+  } catch (e) {
+    console.warn("[KidsG][Supabase] Profile sync notice:", e?.message);
+  }
   sendSuccess(res, {
     onboardingCompleted: true,
     profile: updated
@@ -1890,6 +1907,22 @@ router4.patch("/profile", requireAuth(), (req, res) => {
     return;
   }
   const updated = db.updateProfile(req.user.id, result.data);
+  try {
+    const userEmail = updated.email || req.user?.email;
+    if (userEmail) {
+      supabaseAdmin.from("profiles").upsert({
+        email: userEmail,
+        first_name: updated.firstName || "Student",
+        last_name: updated.lastName || "",
+        onboarding_completed: updated.onboardingCompleted ?? true,
+        selected_class: updated.selectedClass,
+        selected_school: updated.selectedSchool,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }, { onConflict: "email" }).catch((e) => console.warn("[KidsG][Supabase] Profile sync warning:", e?.message));
+    }
+  } catch (e) {
+    console.warn("[KidsG][Supabase] Profile sync warning:", e?.message);
+  }
   sendSuccess(res, updated, "Profile updated successfully");
 });
 router4.delete("/profile", requireAuth(), (req, res) => {
@@ -2682,6 +2715,32 @@ router13.post("/orders", requireAuth(), async (req, res) => {
     return;
   }
   const order = orderRes.order;
+  try {
+    const userEmail = req.user?.email;
+    if (userEmail) {
+      supabaseAdmin.from("profiles").select("id").eq("email", userEmail).single().then(({ data: profile }) => {
+        if (profile?.id) {
+          supabaseAdmin.from("orders").insert({
+            order_number: order.orderNumber,
+            user_id: profile.id,
+            status: order.status,
+            subtotal: order.subtotal,
+            discount: order.discount,
+            coupon_discount: order.couponDiscount,
+            delivery_fee: order.deliveryFee,
+            tax: order.tax,
+            total: order.total,
+            payment_status: order.paymentStatus,
+            payment_method: order.paymentMethod,
+            delivery_status: order.deliveryStatus,
+            delivery_address_snapshot: order.addressSnapshot
+          }).catch((err) => console.warn("[KidsG][Supabase] Order insert notice:", err?.message));
+        }
+      }).catch((err) => console.warn("[KidsG][Supabase] Profile lookup notice:", err?.message));
+    }
+  } catch (e) {
+    console.warn("[KidsG][Supabase] Order sync warning:", e?.message);
+  }
   await notificationService2.send(
     req.user.id,
     "ORDER_CONFIRMED",
