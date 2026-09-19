@@ -10,12 +10,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.kidsg.core.designsystem.KidsGBottomBar
 import com.kidsg.core.designsystem.KidsGNavTab
 import com.kidsg.core.designsystem.KidsGTheme
+import com.kidsg.core.navigation.BackHandler
 import com.kidsg.core.navigation.Screen
+import com.kidsg.core.storage.SessionStorage
 import com.kidsg.data.repository.RepositoryProvider
 import com.kidsg.feature.auth.AuthScreen
 import com.kidsg.feature.bag.SchoolBagScreen
@@ -25,6 +28,7 @@ import com.kidsg.feature.checkout.OrderSuccessScreen
 import com.kidsg.feature.checkout.PaymentMethodScreen
 import com.kidsg.feature.discovery.DiscoveryScreen
 import com.kidsg.feature.home.KidsGDeskHomeScreen
+import com.kidsg.feature.home.LocationSelectionDialog
 import com.kidsg.feature.onboarding.OnboardingScreen
 import com.kidsg.feature.onboarding.StudentSetupScreen
 import com.kidsg.feature.orders.OrdersListScreen
@@ -33,23 +37,38 @@ import com.kidsg.feature.profile.HelpSupportScreen
 import com.kidsg.feature.profile.ProfileScreen
 import com.kidsg.feature.splash.SplashScreen
 import com.kidsg.feature.tracking.OrderTrackingScreen
+import kotlinx.coroutines.launch
 
 /**
  * KidsG Main Application Entry Point
- * Hosts all 20 screens with clean state navigation and bottom bar.
+ * Hosts all 20 screens with clean state navigation, gesture back handling, and bottom bar.
  */
 @Composable
 fun KidsGApp(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialLocation: String? = null
 ) {
     val productRepository = remember { RepositoryProvider.productRepository }
     val cartRepository = remember { RepositoryProvider.cartRepository }
     val configRepository = remember { RepositoryProvider.configRepository }
     val authRepository = remember { RepositoryProvider.authRepository }
+    val orderRepository = remember { RepositoryProvider.orderRepository }
+    val coroutineScope = rememberCoroutineScope()
 
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var currentTab by remember { mutableStateOf(KidsGNavTab.HOME) }
     val screenStack = remember { mutableStateListOf<Screen>() }
+
+    var currentLocation by remember {
+        mutableStateOf(initialLocation ?: SessionStorage.getCurrentLocation() ?: "HSR Layout, Bengaluru")
+    }
+
+    androidx.compose.runtime.LaunchedEffect(initialLocation) {
+        if (!initialLocation.isNullOrBlank()) {
+            currentLocation = initialLocation
+        }
+    }
+    var showLocationDialog by remember { mutableStateOf(false) }
 
     fun navigateTo(screen: Screen) {
         screenStack.add(currentScreen)
@@ -60,12 +79,22 @@ fun KidsGApp(
         if (screenStack.isNotEmpty()) {
             currentScreen = screenStack.removeAt(screenStack.lastIndex)
             return true
+        } else if (currentScreen != Screen.Home && currentScreen != Screen.Splash && currentScreen != Screen.Onboarding) {
+            currentTab = KidsGNavTab.HOME
+            currentScreen = Screen.Home
+            return true
         }
         return false
     }
 
+    // Intercept Android System Back Gestures and 3-Button Navigation
+    BackHandler(enabled = screenStack.isNotEmpty() || (currentScreen != Screen.Home && currentScreen != Screen.Splash && currentScreen != Screen.Onboarding)) {
+        navigateBack()
+    }
+
     val cart by cartRepository.cartState.collectAsState()
     val currentUser by authRepository.currentUser.collectAsState()
+    val activeOrders by orderRepository.observeActiveOrders().collectAsState(initial = emptyList())
 
     val isTopLevelScreen = currentScreen is Screen.Home ||
             currentScreen is Screen.Discovery ||
@@ -108,6 +137,9 @@ fun KidsGApp(
                                 if (currentUser != null && currentUser?.studentName?.isNotBlank() == true) {
                                     currentScreen = Screen.Home
                                     currentTab = KidsGNavTab.HOME
+                                } else if (SessionStorage.isOnboardingCompleted()) {
+                                    currentScreen = Screen.Home
+                                    currentTab = KidsGNavTab.HOME
                                 } else {
                                     currentScreen = Screen.Onboarding
                                 }
@@ -118,9 +150,16 @@ fun KidsGApp(
                     is Screen.Onboarding -> {
                         OnboardingScreen(
                             onGetStarted = {
-                                navigateTo(Screen.Auth)
+                                SessionStorage.setOnboardingCompleted(true)
+                                if (currentUser != null) {
+                                    currentScreen = Screen.Home
+                                    currentTab = KidsGNavTab.HOME
+                                } else {
+                                    navigateTo(Screen.Auth)
+                                }
                             },
                             onExploreGuest = {
+                                SessionStorage.setOnboardingCompleted(true)
                                 currentScreen = Screen.Home
                                 currentTab = KidsGNavTab.HOME
                             }
@@ -130,8 +169,13 @@ fun KidsGApp(
                     is Screen.Auth -> {
                         AuthScreen(
                             authRepository = authRepository,
-                            onAuthSuccess = {
-                                navigateTo(Screen.StudentSetup)
+                            onAuthSuccess = { profile, isReturningUser ->
+                                if (isReturningUser && profile.studentName.isNotBlank()) {
+                                    currentScreen = Screen.Home
+                                    currentTab = KidsGNavTab.HOME
+                                } else {
+                                    navigateTo(Screen.StudentSetup)
+                                }
                             },
                             onBack = {
                                 navigateBack()
@@ -155,6 +199,8 @@ fun KidsGApp(
                             productRepository = productRepository,
                             cartRepository = cartRepository,
                             userProfile = currentUser,
+                            currentLocationName = currentLocation,
+                            onLocationClick = { showLocationDialog = true },
                             onNavigateToDiscovery = { mode ->
                                 currentTab = KidsGNavTab.CATEGORIES
                                 navigateTo(Screen.Discovery(mode, null))
@@ -171,21 +217,21 @@ fun KidsGApp(
                                 navigateTo(Screen.ProductDetail(product))
                             },
                             onAddToCart = { product ->
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     cartRepository.addToCart(product, 1)
                                 }
                             },
                             onIncreaseQuantity = { product ->
                                 val item = cart.items.find { it.product.id == product.id }
                                 val qty = (item?.quantity ?: 0) + 1
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     cartRepository.updateQuantity(product.id, qty)
                                 }
                             },
                             onDecreaseQuantity = { product ->
                                 val item = cart.items.find { it.product.id == product.id }
                                 val qty = (item?.quantity ?: 0) - 1
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     cartRepository.updateQuantity(product.id, qty)
                                 }
                             }
@@ -206,21 +252,21 @@ fun KidsGApp(
                                 currentScreen = Screen.Home
                             },
                             onAddToCart = { product ->
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     cartRepository.addToCart(product, 1)
                                 }
                             },
                             onIncreaseQuantity = { product ->
                                 val item = cart.items.find { it.product.id == product.id }
                                 val qty = (item?.quantity ?: 0) + 1
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     cartRepository.updateQuantity(product.id, qty)
                                 }
                             },
                             onDecreaseQuantity = { product ->
                                 val item = cart.items.find { it.product.id == product.id }
                                 val qty = (item?.quantity ?: 0) - 1
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     cartRepository.updateQuantity(product.id, qty)
                                 }
                             }
@@ -280,7 +326,7 @@ fun KidsGApp(
                             deliverySpeed = screen.deliverySpeed,
                             onBack = { navigateBack() },
                             onPaymentSuccess = { newOrderId ->
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     cartRepository.clearCart()
                                 }
                                 currentScreen = Screen.OrderSuccess(newOrderId, screen.totalAmount)
@@ -314,12 +360,17 @@ fun KidsGApp(
 
                     is Screen.Orders -> {
                         OrdersListScreen(
+                            orders = activeOrders,
                             onBack = {
                                 currentTab = KidsGNavTab.HOME
                                 currentScreen = Screen.Home
                             },
                             onOrderClick = { orderId ->
                                 navigateTo(Screen.OrderTracking(orderId))
+                            },
+                            onExploreDesk = {
+                                currentTab = KidsGNavTab.HOME
+                                currentScreen = Screen.Home
                             }
                         )
                     }
@@ -334,7 +385,7 @@ fun KidsGApp(
                             },
                             onNavigateToHelp = { navigateTo(Screen.HelpSupport) },
                             onLogout = {
-                                kotlinx.coroutines.runBlocking {
+                                coroutineScope.launch {
                                     authRepository.logout()
                                 }
                                 currentScreen = Screen.Onboarding
@@ -356,6 +407,8 @@ fun KidsGApp(
                             productRepository = productRepository,
                             cartRepository = cartRepository,
                             userProfile = currentUser,
+                            currentLocationName = currentLocation,
+                            onLocationClick = { showLocationDialog = true },
                             onNavigateToDiscovery = { mode -> currentScreen = Screen.Discovery(mode, null) },
                             onNavigateToCategory = { catId -> currentScreen = Screen.Discovery(null, catId) },
                             onNavigateToSearch = { currentScreen = Screen.Discovery(null, null) },
@@ -365,6 +418,17 @@ fun KidsGApp(
                             onDecreaseQuantity = {}
                         )
                     }
+                }
+
+                // Global Live Location Picker Dialog
+                if (showLocationDialog) {
+                    LocationSelectionDialog(
+                        currentLocation = currentLocation,
+                        onDismiss = { showLocationDialog = false },
+                        onLocationSelected = { loc, label ->
+                            currentLocation = "$loc ($label)"
+                        }
+                    )
                 }
             }
         }

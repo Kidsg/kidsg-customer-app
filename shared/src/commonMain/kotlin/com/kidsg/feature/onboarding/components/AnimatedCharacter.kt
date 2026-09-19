@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kidsg.core.designsystem.KidsGColors
 import com.kidsg.feature.onboarding.CharacterPose
@@ -31,7 +30,7 @@ import kotlin.math.sin
 
 /**
  * Reusable Animated Character Composable for KidsG Onboarding.
- * Supports Boy and Girl characters with smooth pose animations (IDLE, WALK, EXCITED, PUSH_TROLLEY).
+ * Renders realistic Boy and Girl student illustrations matching the storyboard specifications.
  */
 @Composable
 fun KidsGCharacter(
@@ -60,14 +59,14 @@ fun KidsGCharacter(
         }
         PoseType.WALK, PoseType.PUSH_TROLLEY -> {
             val stepCycle = (pose.walkFrame % 4)
-            val stepPhase = stepCycle * (Math.PI / 2)
-            val verticalBob = (sin(stepPhase * 2) * 4f).toFloat()
-            val legSwing = (sin(stepPhase) * 22f).toFloat()
-            val armSwing = (-sin(stepPhase) * 25f).toFloat()
+            val stepPhase = stepCycle * (kotlin.math.PI / 2.0)
+            val verticalBob = (sin(stepPhase * 2.0) * 4.0).toFloat()
+            val legSwing = (sin(stepPhase) * 22.0).toFloat()
+            val armSwing = (-sin(stepPhase) * 25.0).toFloat()
             Tuple5(verticalBob, legSwing, -legSwing, armSwing, -armSwing)
         }
         PoseType.EXCITED -> {
-            val cheerBob = (sin(idleFloat * 2) * 6f).toFloat()
+            val cheerBob = (sin(idleFloat * 2.0) * 6.0).toFloat()
             Tuple5(cheerBob, -10f, 10f, -140f, -140f) // Arms raised up high celebrating!
         }
     }
@@ -82,7 +81,7 @@ fun KidsGCharacter(
             val h = size.height
             val cy = (h * 0.42f) + bobbingY
 
-            // 1. Shadow underneath character
+            // 1. Soft Shadow underneath character
             val shadowWidth = w * (if (pose.type == PoseType.EXCITED) 0.40f else 0.48f)
             drawOval(
                 color = KidsGColors.ShadowColor,
@@ -92,199 +91,290 @@ fun KidsGCharacter(
 
             val isBoy = characterType == CharacterType.BOY
 
-            // Colors
+            // Colors matching storyboard character illustrations
             val skinColor = Color(0xFFFFDFBA)
+            val skinShadow = Color(0xFFF2C29B)
             val hairColor = if (isBoy) Color(0xFF332014) else Color(0xFF2C1810)
-            val topColor = if (isBoy) KidsGColors.OrangePrimary else KidsGColors.AccentPink
-            val pantsColor = if (isBoy) Color(0xFF1E3A8A) else KidsGColors.AccentPink.copy(alpha = 0.8f)
-            val shoeColor = Color(0xFF111111)
+            val jacketColor = KidsGColors.OrangePrimary
+            val jacketDark = KidsGColors.OrangeDark
+            val innerShirt = Color(0xFF1D4ED8)
+            val pinaforePink = Color(0xFFF43F5E)
+            val pinaforeLight = Color(0xFFFF9ACD)
+            val jeansColor = Color(0xFF1E3A8A)
+            val sneakerNavy = Color(0xFF1E293B)
+            val sneakerWhite = Color(0xFFF8FAFC)
 
-            // Flip horizontally if facing left
-            val flipFactor = if (pose.isFacingRight) 1f else -1f
-
-            // 2. Backpack (behind body)
+            // 2. School Backpack (peeking behind shoulders)
+            val bagColor = if (isBoy) Color(0xFF2563EB) else Color(0xFFF59E0B)
             drawRoundRect(
-                color = if (isBoy) Color(0xFF3B82F6) else Color(0xFFF59E0B),
-                topLeft = Offset(w * 0.28f, cy - h * 0.02f),
-                size = Size(w * 0.18f, h * 0.28f),
-                cornerRadius = CornerRadius(8.dp.toPx())
+                color = bagColor,
+                topLeft = Offset(w * 0.28f, cy - h * 0.04f),
+                size = Size(w * 0.18f, h * 0.30f),
+                cornerRadius = CornerRadius(10.dp.toPx())
             )
 
-            // 3. Legs
+            // 3. Legs & Footwear
             // Left Leg
             val leftLegX = w * 0.42f + (leftLegAngle * 0.4f)
             drawLine(
-                color = pantsColor,
+                color = if (isBoy) jeansColor else skinColor,
                 start = Offset(w * 0.44f, cy + h * 0.20f),
                 end = Offset(leftLegX, cy + h * 0.42f),
-                strokeWidth = 12.dp.toPx(),
+                strokeWidth = 13.dp.toPx(),
                 cap = StrokeCap.Round
             )
-            // Left Shoe
+
+            // Left Shoe / Sock
+            if (!isBoy) {
+                // White sock for Girl
+                drawLine(
+                    color = sneakerWhite,
+                    start = Offset(leftLegX, cy + h * 0.35f),
+                    end = Offset(leftLegX, cy + h * 0.42f),
+                    strokeWidth = 13.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
             drawRoundRect(
-                color = shoeColor,
-                topLeft = Offset(leftLegX - w * 0.04f, cy + h * 0.41f),
-                size = Size(w * 0.10f, h * 0.05f),
-                cornerRadius = CornerRadius(4.dp.toPx())
+                color = if (isBoy) sneakerNavy else Color(0xFF111111),
+                topLeft = Offset(leftLegX - w * 0.05f, cy + h * 0.40f),
+                size = Size(w * 0.11f, h * 0.06f),
+                cornerRadius = CornerRadius(5.dp.toPx())
             )
+            if (isBoy) {
+                // Sneaker white sole
+                drawRoundRect(
+                    color = sneakerWhite,
+                    topLeft = Offset(leftLegX - w * 0.05f, cy + h * 0.44f),
+                    size = Size(w * 0.11f, h * 0.02f),
+                    cornerRadius = CornerRadius(2.dp.toPx())
+                )
+            }
 
             // Right Leg
             val rightLegX = w * 0.54f + (rightLegAngle * 0.4f)
             drawLine(
-                color = pantsColor,
+                color = if (isBoy) jeansColor else skinColor,
                 start = Offset(w * 0.52f, cy + h * 0.20f),
                 end = Offset(rightLegX, cy + h * 0.42f),
-                strokeWidth = 12.dp.toPx(),
+                strokeWidth = 13.dp.toPx(),
                 cap = StrokeCap.Round
             )
-            // Right Shoe
-            drawRoundRect(
-                color = shoeColor,
-                topLeft = Offset(rightLegX - w * 0.04f, cy + h * 0.41f),
-                size = Size(w * 0.10f, h * 0.05f),
-                cornerRadius = CornerRadius(4.dp.toPx())
-            )
 
-            // 4. Torso / Clothes (Hoodie for Boy, Dress/Top for Girl)
-            drawRoundRect(
-                color = topColor,
-                topLeft = Offset(w * 0.36f, cy - h * 0.02f),
-                size = Size(w * 0.26f, h * 0.24f),
-                cornerRadius = CornerRadius(10.dp.toPx())
-            )
-
+            // Right Shoe / Sock
             if (!isBoy) {
-                // Girl Skirt flare
-                val skirtPath = Path().apply {
-                    moveTo(w * 0.34f, cy + h * 0.12f)
-                    lineTo(w * 0.64f, cy + h * 0.12f)
-                    lineTo(w * 0.68f, cy + h * 0.23f)
-                    lineTo(w * 0.30f, cy + h * 0.23f)
-                    close()
-                }
-                drawPath(skirtPath, color = KidsGColors.AccentPink)
-            } else {
-                // Boy Jacket Zipper line
                 drawLine(
-                    color = KidsGColors.OrangeDark,
-                    start = Offset(w * 0.49f, cy - h * 0.01f),
-                    end = Offset(w * 0.49f, cy + h * 0.21f),
-                    strokeWidth = 2.dp.toPx()
+                    color = sneakerWhite,
+                    start = Offset(rightLegX, cy + h * 0.35f),
+                    end = Offset(rightLegX, cy + h * 0.42f),
+                    strokeWidth = 13.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+            drawRoundRect(
+                color = if (isBoy) sneakerNavy else Color(0xFF111111),
+                topLeft = Offset(rightLegX - w * 0.05f, cy + h * 0.40f),
+                size = Size(w * 0.11f, h * 0.06f),
+                cornerRadius = CornerRadius(5.dp.toPx())
+            )
+            if (isBoy) {
+                drawRoundRect(
+                    color = sneakerWhite,
+                    topLeft = Offset(rightLegX - w * 0.05f, cy + h * 0.44f),
+                    size = Size(w * 0.11f, h * 0.02f),
+                    cornerRadius = CornerRadius(2.dp.toPx())
                 )
             }
 
-            // 5. Arms
+            // 4. Torso & Outfit (Boy KidsG Orange Hoodie vs Girl Pink Pinafore)
+            if (isBoy) {
+                // Royal Blue inner shirt collar
+                drawRoundRect(
+                    color = innerShirt,
+                    topLeft = Offset(w * 0.42f, cy - h * 0.04f),
+                    size = Size(w * 0.14f, h * 0.08f),
+                    cornerRadius = CornerRadius(4.dp.toPx())
+                )
+                // Bright Orange Hoodie Jacket
+                drawRoundRect(
+                    color = jacketColor,
+                    topLeft = Offset(w * 0.35f, cy - h * 0.02f),
+                    size = Size(w * 0.28f, h * 0.24f),
+                    cornerRadius = CornerRadius(12.dp.toPx())
+                )
+                // Jacket Zipper Line
+                drawLine(
+                    color = jacketDark,
+                    start = Offset(w * 0.49f, cy - h * 0.01f),
+                    end = Offset(w * 0.49f, cy + h * 0.21f),
+                    strokeWidth = 2.5.dp.toPx()
+                )
+                // Hoodie Front Pocket
+                drawRoundRect(
+                    color = jacketDark.copy(alpha = 0.3f),
+                    topLeft = Offset(w * 0.41f, cy + h * 0.12f),
+                    size = Size(w * 0.16f, h * 0.08f),
+                    cornerRadius = CornerRadius(4.dp.toPx())
+                )
+            } else {
+                // White collared blouse for Girl
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = Offset(w * 0.36f, cy - h * 0.04f),
+                    size = Size(w * 0.26f, h * 0.12f),
+                    cornerRadius = CornerRadius(6.dp.toPx())
+                )
+                // Pink Pinafore Dress Torso & Skirt
+                val pinaforePath = Path().apply {
+                    moveTo(w * 0.38f, cy - h * 0.02f)
+                    lineTo(w * 0.60f, cy - h * 0.02f)
+                    lineTo(w * 0.68f, cy + h * 0.22f)
+                    lineTo(w * 0.30f, cy + h * 0.22f)
+                    close()
+                }
+                drawPath(pinaforePath, color = pinaforePink)
+                // Skirt folds detail
+                drawLine(color = pinaforeLight, start = Offset(w * 0.44f, cy + h * 0.08f), end = Offset(w * 0.42f, cy + h * 0.22f), strokeWidth = 2.dp.toPx())
+                drawLine(color = pinaforeLight, start = Offset(w * 0.54f, cy + h * 0.08f), end = Offset(w * 0.56f, cy + h * 0.22f), strokeWidth = 2.dp.toPx())
+            }
+
+            // 5. Arms & Hands
+            val sleeveColor = if (isBoy) jacketColor else pinaforePink
+
             if (pose.type == PoseType.PUSH_TROLLEY) {
-                // Reaching forward to hold trolley
+                // Reaching forward to hold trolley handle
                 drawLine(
-                    color = topColor,
+                    color = sleeveColor,
                     start = Offset(w * 0.48f, cy + h * 0.04f),
-                    end = Offset(w * 0.72f, cy + h * 0.08f),
-                    strokeWidth = 10.dp.toPx(),
+                    end = Offset(w * 0.74f, cy + h * 0.08f),
+                    strokeWidth = 11.dp.toPx(),
                     cap = StrokeCap.Round
                 )
-                drawCircle(color = skinColor, radius = w * 0.035f, center = Offset(w * 0.73f, cy + h * 0.08f))
+                drawCircle(color = skinColor, radius = w * 0.038f, center = Offset(w * 0.75f, cy + h * 0.08f))
             } else if (pose.type == PoseType.EXCITED) {
-                // Arms up high in excitement!
+                // Both arms raised high celebrating!
                 drawLine(
-                    color = topColor,
+                    color = sleeveColor,
                     start = Offset(w * 0.38f, cy + h * 0.04f),
-                    end = Offset(w * 0.26f, cy - h * 0.16f),
-                    strokeWidth = 10.dp.toPx(),
+                    end = Offset(w * 0.25f, cy - h * 0.18f),
+                    strokeWidth = 11.dp.toPx(),
                     cap = StrokeCap.Round
                 )
-                drawCircle(color = skinColor, radius = w * 0.035f, center = Offset(w * 0.25f, cy - h * 0.17f))
+                drawCircle(color = skinColor, radius = w * 0.038f, center = Offset(w * 0.24f, cy - h * 0.19f))
 
                 drawLine(
-                    color = topColor,
+                    color = sleeveColor,
                     start = Offset(w * 0.60f, cy + h * 0.04f),
-                    end = Offset(w * 0.72f, cy - h * 0.16f),
+                    end = Offset(w * 0.73f, cy - h * 0.18f),
+                    strokeWidth = 11.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawCircle(color = skinColor, radius = w * 0.038f, center = Offset(w * 0.74f, cy - h * 0.19f))
+            } else {
+                // Natural arm swing during walk/idle
+                val leftArmX = w * 0.38f + (leftArmAngle * 0.3f)
+                drawLine(
+                    color = sleeveColor,
+                    start = Offset(w * 0.38f, cy + h * 0.04f),
+                    end = Offset(leftArmX, cy + h * 0.18f),
                     strokeWidth = 10.dp.toPx(),
                     cap = StrokeCap.Round
                 )
-                drawCircle(color = skinColor, radius = w * 0.035f, center = Offset(w * 0.73f, cy - h * 0.17f))
-            } else {
-                // Normal arm swing
-                val leftArmX = w * 0.38f + (leftArmAngle * 0.3f)
-                drawLine(
-                    color = topColor,
-                    start = Offset(w * 0.38f, cy + h * 0.04f),
-                    end = Offset(leftArmX, cy + h * 0.18f),
-                    strokeWidth = 9.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                drawCircle(color = skinColor, radius = w * 0.03f, center = Offset(leftArmX, cy + h * 0.18f))
+                drawCircle(color = skinColor, radius = w * 0.035f, center = Offset(leftArmX, cy + h * 0.18f))
 
                 val rightArmX = w * 0.60f + (rightArmAngle * 0.3f)
                 drawLine(
-                    color = topColor,
+                    color = sleeveColor,
                     start = Offset(w * 0.60f, cy + h * 0.04f),
                     end = Offset(rightArmX, cy + h * 0.18f),
-                    strokeWidth = 9.dp.toPx(),
+                    strokeWidth = 10.dp.toPx(),
                     cap = StrokeCap.Round
                 )
-                drawCircle(color = skinColor, radius = w * 0.03f, center = Offset(rightArmX, cy + h * 0.18f))
+                drawCircle(color = skinColor, radius = w * 0.035f, center = Offset(rightArmX, cy + h * 0.18f))
             }
 
-            // 6. Head & Face
+            // 6. Head, Hair & Expressions
             val headCenter = Offset(w * 0.49f, cy - h * 0.16f)
+
+            // Neck
+            drawRoundRect(
+                color = skinShadow,
+                topLeft = Offset(headCenter.x - w * 0.04f, headCenter.y + h * 0.12f),
+                size = Size(w * 0.08f, h * 0.06f),
+                cornerRadius = CornerRadius(2.dp.toPx())
+            )
+
+            // Face Head Base
             drawCircle(color = skinColor, radius = w * 0.18f, center = headCenter)
 
-            // Hair
+            // Detailed Hair Styling matching storyboard illustration
             if (isBoy) {
-                // Short spiky messy hair
+                // Boy: Messy short spiky layered dark brown hair
                 val hairPath = Path().apply {
-                    moveTo(headCenter.x - w * 0.18f, headCenter.y - h * 0.02f)
-                    cubicTo(headCenter.x - w * 0.15f, headCenter.y - h * 0.26f, headCenter.x + w * 0.15f, headCenter.y - h * 0.26f, headCenter.x + w * 0.18f, headCenter.y - h * 0.02f)
-                    cubicTo(headCenter.x + w * 0.10f, headCenter.y - h * 0.16f, headCenter.x - w * 0.10f, headCenter.y - h * 0.16f, headCenter.x - w * 0.18f, headCenter.y - h * 0.02f)
+                    moveTo(headCenter.x - w * 0.19f, headCenter.y + h * 0.02f)
+                    cubicTo(headCenter.x - w * 0.22f, headCenter.y - h * 0.26f, headCenter.x + w * 0.22f, headCenter.y - h * 0.26f, headCenter.x + w * 0.19f, headCenter.y + h * 0.02f)
+                    cubicTo(headCenter.x + w * 0.12f, headCenter.y - h * 0.10f, headCenter.x - w * 0.12f, headCenter.y - h * 0.10f, headCenter.x - w * 0.19f, headCenter.y + h * 0.02f)
                     close()
                 }
                 drawPath(hairPath, color = hairColor)
+                // Front fringe tufts
+                val fringePath = Path().apply {
+                    moveTo(headCenter.x - w * 0.14f, headCenter.y - h * 0.12f)
+                    lineTo(headCenter.x - w * 0.06f, headCenter.y - h * 0.04f)
+                    lineTo(headCenter.x + w * 0.02f, headCenter.y - h * 0.12f)
+                    lineTo(headCenter.x + w * 0.10f, headCenter.y - h * 0.04f)
+                    lineTo(headCenter.x + w * 0.15f, headCenter.y - h * 0.12f)
+                    close()
+                }
+                drawPath(fringePath, color = hairColor)
             } else {
-                // Girl long wavy hair
+                // Girl: Long cascading dark brown wavy hair
                 val hairPath = Path().apply {
-                    moveTo(headCenter.x - w * 0.22f, headCenter.y + h * 0.16f)
-                    cubicTo(headCenter.x - w * 0.24f, headCenter.y - h * 0.26f, headCenter.x + w * 0.24f, headCenter.y - h * 0.26f, headCenter.x + w * 0.22f, headCenter.y + h * 0.16f)
-                    cubicTo(headCenter.x + w * 0.14f, headCenter.y - h * 0.12f, headCenter.x - w * 0.14f, headCenter.y - h * 0.12f, headCenter.x - w * 0.22f, headCenter.y + h * 0.16f)
+                    moveTo(headCenter.x - w * 0.24f, headCenter.y + h * 0.24f)
+                    cubicTo(headCenter.x - w * 0.26f, headCenter.y - h * 0.28f, headCenter.x + w * 0.26f, headCenter.y - h * 0.28f, headCenter.x + w * 0.24f, headCenter.y + h * 0.24f)
+                    cubicTo(headCenter.x + w * 0.16f, headCenter.y - h * 0.08f, headCenter.x - w * 0.16f, headCenter.y - h * 0.08f, headCenter.x - w * 0.24f, headCenter.y + h * 0.24f)
                     close()
                 }
                 drawPath(hairPath, color = hairColor)
+                // Side wave strands
+                drawCircle(color = hairColor, radius = w * 0.08f, center = Offset(headCenter.x - w * 0.18f, headCenter.y + h * 0.10f))
+                drawCircle(color = hairColor, radius = w * 0.08f, center = Offset(headCenter.x + w * 0.18f, headCenter.y + h * 0.10f))
             }
 
             // Sparkling Eyes
-            drawCircle(color = KidsGColors.BlackText, radius = w * 0.028f, center = Offset(headCenter.x - w * 0.06f, headCenter.y - h * 0.01f))
-            drawCircle(color = KidsGColors.White, radius = w * 0.010f, center = Offset(headCenter.x - w * 0.05f, headCenter.y - h * 0.02f))
+            drawCircle(color = KidsGColors.BlackText, radius = w * 0.030f, center = Offset(headCenter.x - w * 0.06f, headCenter.y - h * 0.01f))
+            drawCircle(color = Color.White, radius = w * 0.012f, center = Offset(headCenter.x - w * 0.05f, headCenter.y - h * 0.02f))
 
-            drawCircle(color = KidsGColors.BlackText, radius = w * 0.028f, center = Offset(headCenter.x + w * 0.06f, headCenter.y - h * 0.01f))
-            drawCircle(color = KidsGColors.White, radius = w * 0.010f, center = Offset(headCenter.x + w * 0.07f, headCenter.y - h * 0.02f))
+            drawCircle(color = KidsGColors.BlackText, radius = w * 0.030f, center = Offset(headCenter.x + w * 0.06f, headCenter.y - h * 0.01f))
+            drawCircle(color = Color.White, radius = w * 0.012f, center = Offset(headCenter.x + w * 0.07f, headCenter.y - h * 0.02f))
 
             // Rosy Cheeks
-            drawCircle(color = KidsGColors.AccentPink.copy(alpha = 0.5f), radius = w * 0.035f, center = Offset(headCenter.x - w * 0.10f, headCenter.y + h * 0.05f))
-            drawCircle(color = KidsGColors.AccentPink.copy(alpha = 0.5f), radius = w * 0.035f, center = Offset(headCenter.x + w * 0.10f, headCenter.y + h * 0.05f))
+            drawCircle(color = KidsGColors.AccentPink.copy(alpha = 0.5f), radius = w * 0.038f, center = Offset(headCenter.x - w * 0.10f, headCenter.y + h * 0.05f))
+            drawCircle(color = KidsGColors.AccentPink.copy(alpha = 0.5f), radius = w * 0.038f, center = Offset(headCenter.x + w * 0.10f, headCenter.y + h * 0.05f))
 
-            // Smile
+            // Expression / Smile
             if (pose.type == PoseType.EXCITED) {
-                // Big open cheerful mouth!
+                // Joyful open laugh!
                 val openMouth = Path().apply {
-                    moveTo(headCenter.x - w * 0.05f, headCenter.y + h * 0.05f)
-                    cubicTo(headCenter.x, headCenter.y + h * 0.12f, headCenter.x + w * 0.05f, headCenter.y + h * 0.12f, headCenter.x + w * 0.05f, headCenter.y + h * 0.05f)
+                    moveTo(headCenter.x - w * 0.06f, headCenter.y + h * 0.05f)
+                    cubicTo(headCenter.x, headCenter.y + h * 0.13f, headCenter.x + w * 0.06f, headCenter.y + h * 0.13f, headCenter.x + w * 0.06f, headCenter.y + h * 0.05f)
                     close()
                 }
                 drawPath(openMouth, color = KidsGColors.BlackText)
             } else {
-                // Cheerful smile arc
+                // Warm friendly smile arc
                 val smileArc = Path().apply {
                     moveTo(headCenter.x - w * 0.05f, headCenter.y + h * 0.06f)
                     cubicTo(headCenter.x, headCenter.y + h * 0.11f, headCenter.x, headCenter.y + h * 0.11f, headCenter.x + w * 0.05f, headCenter.y + h * 0.06f)
                 }
-                drawPath(smileArc, color = KidsGColors.BlackText, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(smileArc, color = KidsGColors.BlackText, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
             }
 
-            // Star particles if excited
+            // Star particles bursting during excitement
             if (pose.type == PoseType.EXCITED) {
-                drawCircle(color = KidsGColors.AccentYellow, radius = 4.dp.toPx(), center = Offset(headCenter.x - w * 0.22f, headCenter.y - h * 0.20f))
-                drawCircle(color = KidsGColors.AccentPink, radius = 5.dp.toPx(), center = Offset(headCenter.x + w * 0.24f, headCenter.y - h * 0.18f))
-                drawCircle(color = KidsGColors.AccentMint, radius = 4.dp.toPx(), center = Offset(headCenter.x + w * 0.20f, headCenter.y + h * 0.10f))
+                drawCircle(color = KidsGColors.AccentYellow, radius = 5.dp.toPx(), center = Offset(headCenter.x - w * 0.24f, headCenter.y - h * 0.22f))
+                drawCircle(color = KidsGColors.AccentPink, radius = 6.dp.toPx(), center = Offset(headCenter.x + w * 0.26f, headCenter.y - h * 0.20f))
+                drawCircle(color = KidsGColors.AccentMint, radius = 5.dp.toPx(), center = Offset(headCenter.x + w * 0.22f, headCenter.y + h * 0.12f))
             }
         }
     }

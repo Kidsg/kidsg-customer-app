@@ -38,6 +38,11 @@ import com.kidsg.core.designsystem.KidsGShapes
 import com.kidsg.core.designsystem.KidsGSpacing
 import com.kidsg.core.designsystem.KidsGTypography
 
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import com.kidsg.domain.model.Order
+import com.kidsg.domain.model.OrderStatus
+
 data class DisplayOrderItem(
     val id: String,
     val itemsSummary: String,
@@ -48,56 +53,51 @@ data class DisplayOrderItem(
 )
 
 /**
- * My Orders List Screen (Reference Screen 18)
+ * My Orders List Screen - Real Orders Only
  */
 @Composable
 fun OrdersListScreen(
+    orders: List<Order> = emptyList(),
     onBack: () -> Unit,
     onOrderClick: (orderId: String) -> Unit,
+    onExploreDesk: () -> Unit = onBack,
     modifier: Modifier = Modifier
 ) {
     var selectedFilter by remember { mutableStateOf("All") }
-    val filters = listOf("All", "Processing", "Shipped", "Delivered")
+    val filters = listOf("All", "Confirmed", "Processing", "Delivered")
 
-    val mockOrders = remember {
-        listOf(
+    val displayOrders = remember(orders) {
+        orders.map { order ->
+            val itemCount = order.items.sumOf { it.quantity }
+            val firstItemName = order.items.firstOrNull()?.product?.name ?: "School Stationery"
+            val summary = if (itemCount <= 1) firstItemName else "$itemCount Items • $firstItemName"
+            val icon = when {
+                firstItemName.contains("Bag", ignoreCase = true) -> "🎒"
+                firstItemName.contains("Pen", ignoreCase = true) || firstItemName.contains("Pencil", ignoreCase = true) -> "✏️"
+                firstItemName.contains("Notebook", ignoreCase = true) -> "📓"
+                firstItemName.contains("Art", ignoreCase = true) || firstItemName.contains("Colour", ignoreCase = true) -> "🎨"
+                else -> "📦"
+            }
+            val statusDisplay = when (order.status) {
+                OrderStatus.DELIVERED -> "Delivered"
+                OrderStatus.OUT_FOR_DELIVERY -> "Out for Delivery"
+                OrderStatus.CONFIRMED -> "Confirmed"
+                OrderStatus.CANCELLED -> "Cancelled"
+                else -> "Processing"
+            }
             DisplayOrderItem(
-                id = "KG12345678",
-                itemsSummary = "2 Items",
-                amount = "₹290",
-                dateText = "Delivered • 12 Aug 2024",
-                status = "Delivered",
-                icon = "📓"
-            ),
-            DisplayOrderItem(
-                id = "KG12345677",
-                itemsSummary = "3 Items",
-                amount = "₹550",
-                dateText = "Shipped • 10 Aug 2024",
-                status = "Shipped",
-                icon = "🎒"
-            ),
-            DisplayOrderItem(
-                id = "KG12345676",
-                itemsSummary = "1 Item",
-                amount = "₹100",
-                dateText = "Processing • 8 Aug 2024",
-                status = "Processing",
-                icon = "✏️"
-            ),
-            DisplayOrderItem(
-                id = "KG12345675",
-                itemsSummary = "3 Items",
-                amount = "₹420",
-                dateText = "Delivered • 5 Aug 2024",
-                status = "Delivered",
-                icon = "🎨"
+                id = order.displayOrderId,
+                itemsSummary = summary,
+                amount = "₹${order.totalAmount.toInt()}",
+                dateText = "$statusDisplay • Just now",
+                status = statusDisplay,
+                icon = icon
             )
-        )
+        }
     }
 
-    val filteredOrders = remember(selectedFilter) {
-        if (selectedFilter == "All") mockOrders else mockOrders.filter { it.status == selectedFilter }
+    val filteredOrders = remember(selectedFilter, displayOrders) {
+        if (selectedFilter == "All") displayOrders else displayOrders.filter { it.status.contains(selectedFilter, ignoreCase = true) }
     }
 
     Column(
@@ -132,44 +132,100 @@ fun OrdersListScreen(
             )
         }
 
-        // Filter Pills
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(KidsGColors.White)
-                .padding(horizontal = KidsGSpacing.lg, vertical = KidsGSpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(KidsGSpacing.sm)
-        ) {
-            items(filters) { filter ->
-                val isSelected = selectedFilter == filter
-                Box(
-                    modifier = Modifier
-                        .clip(KidsGShapes.FullPill)
-                        .background(if (isSelected) KidsGColors.OrangePrimary else KidsGColors.SurfaceElevated)
-                        .clickable { selectedFilter = filter }
-                        .padding(horizontal = 16.dp, vertical = 7.dp)
+        if (displayOrders.isEmpty()) {
+            // Empty State: No Dummy Orders, Clean and Actionable!
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFF7ED)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "📦", fontSize = 48.sp)
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
                     Text(
-                        text = filter,
-                        style = KidsGTypography.Caption.copy(
-                            color = if (isSelected) KidsGColors.White else KidsGColors.TextSecondary,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        text = "No Orders Yet",
+                        style = KidsGTypography.TitleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = Color(0xFF1E293B)
                         )
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "When you place orders for stationery, they will appear here with live delivery tracking.",
+                        style = KidsGTypography.BodyMedium.copy(
+                            color = KidsGColors.TextSecondary,
+                            fontSize = 14.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        ),
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = onExploreDesk,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary),
+                        modifier = Modifier.fillMaxWidth(0.75f).height(50.dp)
+                    ) {
+                        Text(
+                            text = "Browse Stationery Desk →",
+                            style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                        )
+                    }
                 }
             }
-        }
+        } else {
+            // Filter Pills
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(KidsGColors.White)
+                    .padding(horizontal = KidsGSpacing.lg, vertical = KidsGSpacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(KidsGSpacing.sm)
+            ) {
+                items(filters) { filter ->
+                    val isSelected = selectedFilter == filter
+                    Box(
+                        modifier = Modifier
+                            .clip(KidsGShapes.FullPill)
+                            .background(if (isSelected) KidsGColors.OrangePrimary else KidsGColors.SurfaceElevated)
+                            .clickable { selectedFilter = filter }
+                            .padding(horizontal = 16.dp, vertical = 7.dp)
+                    ) {
+                        Text(
+                            text = filter,
+                            style = KidsGTypography.Caption.copy(
+                                color = if (isSelected) KidsGColors.White else KidsGColors.TextSecondary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        )
+                    }
+                }
+            }
 
-        Spacer(modifier = Modifier.height(KidsGSpacing.sm))
+            Spacer(modifier = Modifier.height(KidsGSpacing.sm))
 
-        // Orders List
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = KidsGSpacing.lg, vertical = KidsGSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(KidsGSpacing.md)
-        ) {
-            items(filteredOrders) { order ->
-                OrderCard(order = order, onClick = { onOrderClick(order.id) })
+            // Orders List
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = KidsGSpacing.lg, vertical = KidsGSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(KidsGSpacing.md)
+            ) {
+                items(filteredOrders) { order ->
+                    OrderCard(order = order, onClick = { onOrderClick(order.id) })
+                }
             }
         }
     }

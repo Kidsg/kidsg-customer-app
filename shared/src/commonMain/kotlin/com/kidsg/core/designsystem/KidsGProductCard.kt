@@ -232,7 +232,24 @@ fun KidsGProductCard(
  * Procedural Stationery Visual for products based on category/name
  */
 @Composable
-fun KidsGProductVisual(product: Product, modifier: Modifier = Modifier.size(60.dp)) {
+fun KidsGProductVisual(product: Product, modifier: Modifier = Modifier.size(70.dp)) {
+    if (product.imageUrl.isNotBlank()) {
+        KidsGAsyncImage(
+            url = product.imageUrl,
+            contentDescription = product.name,
+            modifier = modifier,
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            placeholder = {
+                ProductFallbackIcon(product, modifier)
+            }
+        )
+    } else {
+        ProductFallbackIcon(product, modifier)
+    }
+}
+
+@Composable
+private fun ProductFallbackIcon(product: Product, modifier: Modifier) {
     when {
         product.name.contains("Notebook", ignoreCase = true) || product.categoryId == "notebooks" -> {
             KidsGIcons.Notebook(modifier = modifier, color = KidsGColors.OrangePrimary)

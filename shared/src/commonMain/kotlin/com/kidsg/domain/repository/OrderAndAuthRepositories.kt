@@ -20,7 +20,7 @@ interface OrderRepository {
 
 interface AuthRepository {
     val currentUser: StateFlow<UserProfile?>
-    suspend fun requestOtp(phoneNumber: String): Result<Boolean>
+    suspend fun requestOtp(phoneNumber: String): Result<String>
     suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<UserProfile>
     suspend fun updateProfile(profile: UserProfile): Result<UserProfile>
     suspend fun logout()

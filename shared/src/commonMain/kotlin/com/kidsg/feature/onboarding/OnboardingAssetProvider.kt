@@ -40,6 +40,8 @@ interface OnboardingAssetProvider {
     
     fun getStationeryColor(type: StationeryItemType): Color
     fun getDecorativeColor(type: DecorativeItemType): Color
+    fun getCharacterDrawableName(type: CharacterType, pose: CharacterPose): String
+    fun getTrolleyDrawableName(isFilled: Boolean): String
 }
 
 object DefaultOnboardingAssetProvider : OnboardingAssetProvider {
@@ -74,5 +76,27 @@ object DefaultOnboardingAssetProvider : OnboardingAssetProvider {
             DecorativeItemType.ARROW -> KidsGColors.OrangePrimary
             DecorativeItemType.DOTS -> KidsGColors.AccentYellow
         }
+    }
+
+    override fun getCharacterDrawableName(type: CharacterType, pose: CharacterPose): String {
+        return if (type == CharacterType.BOY) {
+            when (pose.type) {
+                PoseType.IDLE -> "boy_idle"
+                PoseType.EXCITED -> "boy_excited"
+                PoseType.PUSH_TROLLEY -> "boy_push"
+                PoseType.WALK -> if (pose.walkFrame % 2 == 0) "boy_walk_1" else "boy_walk_2"
+            }
+        } else {
+            when (pose.type) {
+                PoseType.IDLE -> "girl_idle"
+                PoseType.EXCITED -> "girl_excited"
+                PoseType.PUSH_TROLLEY -> "girl_idle"
+                PoseType.WALK -> if (pose.walkFrame % 2 == 0) "girl_walk_1" else "girl_walk_2"
+            }
+        }
+    }
+
+    override fun getTrolleyDrawableName(isFilled: Boolean): String {
+        return if (isFilled) "trolley_full" else "trolley_empty"
     }
 }

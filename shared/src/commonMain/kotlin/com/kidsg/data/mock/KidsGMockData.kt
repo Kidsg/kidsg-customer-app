@@ -170,7 +170,31 @@ object KidsGMockData {
         Category("exam_essentials", "Exam Essentials", "exam-essentials", "Clipboards, clear pouches & board-approved pens", "exam_essentials", "#A7F3D0", 22, true)
     )
 
-    val products = listOf(
+    val products: List<Product> by lazy {
+        rawProducts.map { p ->
+            val img = when {
+                p.id == "prod_color_pencil" || p.name.contains("Colour Pencil", ignoreCase = true) ->
+                    "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=500&auto=format&fit=crop&q=80"
+                p.categoryId == "notebooks" ->
+                    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop&q=80"
+                p.categoryId == "pens_pencils" ->
+                    "https://images.unsplash.com/photo-1585336261026-407a50ee7b2c?w=500&auto=format&fit=crop&q=80"
+                p.categoryId == "art_craft" ->
+                    "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=500&auto=format&fit=crop&q=80"
+                p.categoryId == "geometry" ->
+                    "https://images.unsplash.com/photo-1588072432836-e10032774350?w=500&auto=format&fit=crop&q=80"
+                p.categoryId == "school_bags" ->
+                    "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop&q=80"
+                p.categoryId == "water_bottles" || p.categoryId == "lunch_boxes" ->
+                    "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop&q=80"
+                else ->
+                    "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=500&auto=format&fit=crop&q=80"
+            }
+            if (p.imageUrl.isBlank()) p.copy(imageUrl = img) else p
+        }
+    }
+
+    private val rawProducts = listOf(
         // --- NOTEBOOKS ---
         Product(
             id = "prod_classmate_single_line",

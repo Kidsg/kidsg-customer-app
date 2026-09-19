@@ -347,13 +347,16 @@ fun StudentSetupScreen(
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        val baseProfile = initialProfile ?: UserProfile(
-                            id = "user_${System.currentTimeMillis()}",
+                        val updated = (initialProfile ?: UserProfile(
+                            id = "user_${studentName.replace(" ", "_").lowercase()}",
                             name = studentName,
-                            phone = "+91 98765 43210",
-                            email = "student@kidsg.in"
-                        )
-                        val updated = baseProfile.copy(
+                            phone = "+91 91484 73131",
+                            email = "${studentName.replace(" ", ".").lowercase()}@kidsg.app",
+                            studentName = studentName,
+                            studentGrade = selectedGrade,
+                            schoolName = schoolName,
+                            isParentMode = isParentMode
+                        )).copy(
                             name = studentName,
                             studentName = studentName,
                             studentGrade = selectedGrade,
@@ -361,6 +364,14 @@ fun StudentSetupScreen(
                             isParentMode = isParentMode
                         )
                         authRepository.updateProfile(updated)
+                        val pwd = com.kidsg.core.storage.SessionStorage.getPendingPassword() ?: "Kidsg@123"
+                        com.kidsg.core.storage.SessionStorage.saveAccount(
+                            com.kidsg.core.storage.SessionStorage.AccountRecord(
+                                email = updated.email,
+                                passwordHash = pwd,
+                                profile = updated
+                            )
+                        )
                         onSetupComplete()
                     }
                 },

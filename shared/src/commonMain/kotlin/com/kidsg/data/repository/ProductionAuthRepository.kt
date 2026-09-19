@@ -27,14 +27,14 @@ class ProductionAuthRepository(
 
     override val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
-    override suspend fun requestOtp(phoneNumber: String): Result<Boolean> {
+    override suspend fun requestOtp(phoneNumber: String): Result<String> {
         return when (val res = authApi.sendOtp(phoneNumber)) {
-            is ApiResult.Success -> Result.success(true)
+            is ApiResult.Success -> Result.success(res.message ?: "Verification code sent")
             is ApiResult.Error -> {
                 // If in DEV mode and backend is unreachable from device, provide graceful fallback
                 if (ApiConfig.currentEnvironment == com.kidsg.core.config.AppEnvironment.DEV && 
                     res.exception is com.kidsg.core.network.ApiException.NetworkUnavailable) {
-                    Result.success(true)
+                    Result.success("Verification code sent to $phoneNumber")
                 } else {
                     Result.failure(Exception(res.exception.userFriendlyMessage))
                 }
@@ -61,24 +61,7 @@ class ProductionAuthRepository(
                 Result.success(profile)
             }
             is ApiResult.Error -> {
-                if (ApiConfig.currentEnvironment == com.kidsg.core.config.AppEnvironment.DEV && 
-                    res.exception is com.kidsg.core.network.ApiException.NetworkUnavailable) {
-                    val profile = UserProfile(
-                        id = "user_dev_${System.currentTimeMillis()}",
-                        name = "Student",
-                        phone = if (!phoneNumber.contains("@")) phoneNumber else "",
-                        email = if (phoneNumber.contains("@")) phoneNumber else "",
-                        studentName = "Student",
-                        studentGrade = "Class 1",
-                        schoolName = "KidsG Partner School"
-                    )
-                    _currentUser.value = profile
-                    SessionStorage.saveAuthToken("dev_offline_token")
-                    SessionStorage.saveUserProfile(profile)
-                    Result.success(profile)
-                } else {
-                    Result.failure(Exception(res.exception.userFriendlyMessage))
-                }
+                Result.failure(Exception(res.exception.userFriendlyMessage))
             }
         }
     }

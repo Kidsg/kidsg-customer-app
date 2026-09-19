@@ -1,5 +1,6 @@
 package com.kidsg.data.repository
 
+import com.kidsg.core.storage.SessionStorage
 import com.kidsg.data.mock.KidsGMockData
 import com.kidsg.domain.model.Address
 import com.kidsg.domain.model.CartItem
@@ -18,8 +19,8 @@ class MockAuthRepository : AuthRepository {
     private val _currentUser = MutableStateFlow<UserProfile?>(KidsGMockData.defaultUser)
     override val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
-    override suspend fun requestOtp(phoneNumber: String): Result<Boolean> {
-        return Result.success(true)
+    override suspend fun requestOtp(phoneNumber: String): Result<String> {
+        return Result.success("Verification code sent to $phoneNumber")
     }
 
     override suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<UserProfile> {
@@ -33,41 +34,18 @@ class MockAuthRepository : AuthRepository {
 
     override suspend fun updateProfile(profile: UserProfile): Result<UserProfile> {
         _currentUser.value = profile
+        SessionStorage.saveUserProfile(profile)
         return Result.success(profile)
     }
 
     override suspend fun logout() {
         _currentUser.value = null
+        SessionStorage.clearSession()
     }
 }
 
 class MockOrderRepository : OrderRepository {
-    private val orders = MutableStateFlow(
-        listOf(
-            Order(
-                id = "order_kg_457812",
-                displayOrderId = "#KG2-457812",
-                createdAtEpochMs = 1726251000000L,
-                status = OrderStatus.OUT_FOR_DELIVERY,
-                items = listOf(
-                    CartItem(product = KidsGMockData.products[0], quantity = 2),
-                    CartItem(product = KidsGMockData.products[1], quantity = 1),
-                    CartItem(product = KidsGMockData.products[2], quantity = 1)
-                ),
-                store = KidsGMockData.partnerStore,
-                deliveryAddress = KidsGMockData.defaultAddresses[0],
-                subtotal = 350.0,
-                discount = 40.0,
-                deliveryFee = 0.0,
-                taxes = 15.5,
-                totalAmount = 325.5,
-                paymentMethod = "UPI",
-                riderName = "Venkatesh",
-                riderPhone = "+91 98765 43210",
-                estimatedDeliveryMinutes = 8
-            )
-        )
-    )
+    private val orders: MutableStateFlow<List<Order>> = MutableStateFlow(SessionStorage.getSavedOrders())
 
     override fun observeActiveOrders(): Flow<List<Order>> = orders.asStateFlow()
 
@@ -100,6 +78,7 @@ class MockOrderRepository : OrderRepository {
             estimatedDeliveryMinutes = 12
         )
         orders.update { listOf(newOrder) + it }
+        SessionStorage.addOrder(newOrder)
         return Result.success(newOrder)
     }
 

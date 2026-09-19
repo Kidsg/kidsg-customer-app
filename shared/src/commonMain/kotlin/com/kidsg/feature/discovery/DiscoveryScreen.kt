@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.kidsg.data.mock.KidsGMockData
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,10 +73,10 @@ fun DiscoveryScreen(
     var searchQuery by remember { mutableStateOf("") }
     val cart by cartRepository.cartState.collectAsState()
 
-    val categories = remember { kotlinx.coroutines.runBlocking { productRepository.getCategories() } }
-    val intentModes = remember { kotlinx.coroutines.runBlocking { productRepository.getIntentModes() } }
-    val oopsItems = remember { kotlinx.coroutines.runBlocking { productRepository.getOopsEmergencyItems() } }
-    val allProducts = remember { kotlinx.coroutines.runBlocking { productRepository.getPopularProducts() } }
+    val categories = remember { KidsGMockData.categories }
+    val intentModes = remember { KidsGMockData.intentModes }
+    val oopsItems = remember { KidsGMockData.oopsItems }
+    val allProducts = remember { KidsGMockData.products }
 
     val displayedProducts = remember(selectedMode, selectedCategoryId, searchQuery) {
         allProducts.filter { product ->

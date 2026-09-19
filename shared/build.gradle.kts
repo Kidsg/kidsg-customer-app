@@ -55,6 +55,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.androidx.activity.compose)
         }
 
         iosMain.dependencies {
