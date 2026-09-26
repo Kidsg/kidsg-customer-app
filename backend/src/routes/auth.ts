@@ -187,7 +187,8 @@ router.post('/auth/signup', rateLimit(15, 60000, 'auth_signup'), async (req: Req
 
   // Sync to Supabase auth & profiles if configured
   try {
-    const { data: supaUser } = await supabaseAdmin.auth.admin.createUser({
+    let authUserId: string | undefined = undefined;
+    const { data: supaUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
       email: emailClean,
       password,
       email_confirm: true,
@@ -199,18 +200,33 @@ router.post('/auth/signup', rateLimit(15, 60000, 'auth_signup'), async (req: Req
     });
 
     if (supaUser?.user) {
-      await supabaseAdmin.from('profiles').insert({
-        id: profile.id,
-        auth_user_id: supaUser.user.id,
-        first_name: firstName,
-        last_name: lastName,
-        email: emailClean,
-        phone,
-        role: 'CUSTOMER',
-        onboarding_completed: true,
-        selected_class: selectedClass,
-        selected_school: selectedSchool,
-      });
+      authUserId = supaUser.user.id;
+    } else if (authErr) {
+      console.warn('[KidsG][Supabase] createUser note:', authErr.message);
+      try {
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+        const existingAuth = listData?.users?.find(u => u.email === emailClean);
+        if (existingAuth) {
+          authUserId = existingAuth.id;
+        }
+      } catch (_e) {}
+    }
+
+    const { error: insertErr } = await supabaseAdmin.from('profiles').upsert({
+      ...(authUserId ? { auth_user_id: authUserId } : {}),
+      first_name: firstName,
+      last_name: lastName,
+      email: emailClean,
+      phone: phone || null,
+      role: 'CUSTOMER',
+      onboarding_completed: true,
+      selected_class: selectedClass || null,
+      selected_school: selectedSchool || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'email' });
+
+    if (insertErr) {
+      console.error('[KidsG][Supabase] Profile upsert error:', insertErr);
     }
   } catch (err: any) {
     console.warn('[KidsG][Supabase] User sync notice:', err?.message);
