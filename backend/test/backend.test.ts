@@ -17,7 +17,8 @@ describe('KidsG Master Backend Suite', () => {
       const otpService = new MockOtpService();
       const phone = '+919988776655';
 
-      const sendRes = await otpService.sendOtp(phone);
+      const testCode = '849201';
+      const sendRes = await otpService.sendOtp(phone, testCode);
       expect(sendRes.success).toBe(true);
       expect(sendRes.expiresInSeconds).toBe(300);
 
@@ -25,8 +26,12 @@ describe('KidsG Master Backend Suite', () => {
       const badVerify = await otpService.verifyOtp(phone, '000000');
       expect(badVerify.success).toBe(false);
 
-      // Verify development bypass or actual OTP
-      const goodVerify = await otpService.verifyOtp(phone, '123456');
+      // Verify 123456 does NOT bypass
+      const bypassVerify = await otpService.verifyOtp(phone, '123456');
+      expect(bypassVerify.success).toBe(false);
+
+      // Verify actual OTP succeeds
+      const goodVerify = await otpService.verifyOtp(phone, testCode);
       expect(goodVerify.success).toBe(true);
     });
   });
@@ -221,6 +226,149 @@ describe('KidsG Master Backend Suite', () => {
       expect(tracking.statusHistory[0].completed).toBe(true);
       expect(tracking.statusHistory[5].status).toBe('DELIVERED');
       expect(tracking.statusHistory[5].completed).toBe(false);
+    });
+  });
+
+  describe('9. Complete Production End-to-End Verification (Part 30 Requirements)', () => {
+    const cleanEmail = `test_student_${Date.now()}@kidsg.in`;
+    const cleanPassword = 'StrongStudentPassword2026!';
+    let registeredUserId = '';
+
+    it('TEST 1: New email -> Signup -> Profile created -> Authenticated', () => {
+      const emailCheck = db.checkEmailExists(cleanEmail);
+      expect(emailCheck.exists).toBe(false);
+
+      const signupRes = db.registerUser({
+        email: cleanEmail,
+        password: cleanPassword,
+        firstName: 'Devika',
+        lastName: 'Menon',
+        phone: '+919876543299',
+        selectedClass: 'Class 8',
+        selectedSchool: 'Delhi Public School',
+      });
+      expect(signupRes.success).toBe(true);
+      expect(signupRes.user.email).toBe(cleanEmail);
+      expect(signupRes.user.firstName).toBe('Devika');
+      registeredUserId = signupRes.user.id;
+    });
+
+    it('TEST 2: Existing email -> Continue -> Password authentication -> Success', () => {
+      const check = db.checkEmailExists(cleanEmail);
+      expect(check.exists).toBe(true);
+      expect(check.firstName).toBe('Devika');
+
+      const loginRes = db.authenticateWithPassword(cleanEmail, cleanPassword);
+      expect(loginRes.success).toBe(true);
+      expect(loginRes.user.id).toBe(registeredUserId);
+    });
+
+    it('TEST 3: Existing email -> OTP authentication -> Success', async () => {
+      const otpService = new MockOtpService();
+      const code = '736291';
+      await otpService.sendOtp(cleanEmail, code);
+      const verifyRes = await otpService.verifyOtp(cleanEmail, code);
+      expect(verifyRes.success).toBe(true);
+    });
+
+    it('TEST 4 & 5: Wrong password and random credentials -> Rejected', () => {
+      const wrongPass = db.authenticateWithPassword(cleanEmail, 'WrongPassword123');
+      expect(wrongPass.success).toBe(false);
+
+      const randomUser = db.authenticateWithPassword('random_nobody@unknown.com', 'SomePassword');
+      expect(randomUser.success).toBe(false);
+    });
+
+    it('TEST 6: password = 123456 -> Must NOT authenticate', () => {
+      const bypassAttempt = db.authenticateWithPassword(cleanEmail, '123456');
+      expect(bypassAttempt.success).toBe(false);
+    });
+
+    it('TEST 7: Add products -> Cart persists per user', () => {
+      db.clearCart(registeredUserId);
+      db.addToCart(registeredUserId, 'prod_classmate_single_line', 2);
+      db.addToCart(registeredUserId, 'prod_doms_brush_pens_14', 1);
+
+      const cart = db.getCart(registeredUserId);
+      expect(cart.totalItems).toBe(3);
+      expect(cart.items.length).toBe(2);
+    });
+
+    it('TEST 8: Checkout -> Payment created -> Order created -> Items snapshot created -> Status history created', () => {
+      const addr = db.addAddress(registeredUserId, {
+        userId: registeredUserId,
+        label: 'Home',
+        name: 'Devika Menon',
+        phone: '+919876543299',
+        addressLine1: 'Villa 14, Palm Meadows',
+        addressLine2: 'Whitefield',
+        city: 'Bengaluru',
+        state: 'Karnataka',
+        postalCode: '560066',
+        isDefault: true,
+      });
+
+      const { success, order } = db.createOrder(registeredUserId, addr.id, 'UPI');
+      expect(success).toBe(true);
+      expect(order).toBeDefined();
+      expect(order!.status).toBe('CONFIRMED');
+      expect(order!.items.length).toBe(2);
+      expect(order!.items[0].productName).toBeDefined();
+      expect(order!.items[0].price).toBeGreaterThan(0);
+
+      // Verify payment record persisted
+      const payments = db.getPaymentsForOrder(order!.id);
+      expect(payments.length).toBe(1);
+      expect(payments[0].status).toBe('SUCCESS');
+      expect(payments[0].provider).toBe('MOCK');
+
+      // Verify status history recorded
+      const history = db.getOrderStatusHistory(order!.id);
+      expect(history.length).toBe(1);
+      expect(history[0].status).toBe('CONFIRMED');
+
+      // Verify cart was cleared
+      expect(db.getCart(registeredUserId).items.length).toBe(0);
+    });
+
+    it('TEST 9-19: Complete Order Lifecycle (Shop Acceptance -> Packing -> Ready -> Delivery Assigned -> Picked Up -> Out for Delivery -> Delivered)', () => {
+      const orders = db.getOrders(registeredUserId);
+      expect(orders.length).toBeGreaterThan(0);
+      const order = orders[0];
+
+      // TEST 9: Shop owner receives order
+      const shopOrders = db.getShopOrders(order.storeId, 'NEW');
+      expect(shopOrders.some(o => o.id === order.id)).toBe(true);
+
+      // TEST 10 & 11: Shop owner accepts order -> STORE_ACCEPTED
+      const acceptRes = db.shopAcceptOrder(order.id);
+      expect(acceptRes.success).toBe(true);
+      expect(db.getOrderById(order.id, registeredUserId)!.status).toBe('STORE_ACCEPTED');
+
+      // TEST 12 & 13: Shop owner marks packing -> PREPARING
+      const packRes = db.shopStartPacking(order.id);
+      expect(packRes.success).toBe(true);
+      expect(db.getOrderById(order.id, registeredUserId)!.status).toBe('PREPARING');
+
+      // TEST 14: Shop owner marks ready for pickup -> READY_FOR_PICKUP
+      const readyRes = db.shopReadyForPickup(order.id);
+      expect(readyRes.success).toBe(true);
+      expect(db.getOrderById(order.id, registeredUserId)!.status).toBe('READY_FOR_PICKUP');
+
+      // TEST 15 & 16 & 17: Mock delivery progresses -> PICKED_UP -> OUT_FOR_DELIVERY
+      db.advanceDeliveryStatus(order.id, 'PICKED_UP');
+      expect(db.getOrderById(order.id, registeredUserId)!.status).toBe('PICKED_UP');
+
+      db.advanceDeliveryStatus(order.id, 'OUT_FOR_DELIVERY');
+      expect(db.getOrderById(order.id, registeredUserId)!.status).toBe('OUT_FOR_DELIVERY');
+
+      // TEST 18 & 19: Delivery marked DELIVERED
+      db.advanceDeliveryStatus(order.id, 'DELIVERED');
+      expect(db.getOrderById(order.id, registeredUserId)!.status).toBe('DELIVERED');
+
+      // TEST 20: Complete tracking timeline is persisted in database
+      const fullHistory = db.getOrderStatusHistory(order.id);
+      expect(fullHistory.length).toBe(7); // CONFIRMED -> STORE_ACCEPTED -> PREPARING -> READY_FOR_PICKUP -> PICKED_UP -> OUT_FOR_DELIVERY -> DELIVERED
     });
   });
 });

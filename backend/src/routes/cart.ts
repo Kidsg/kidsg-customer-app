@@ -1,10 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { sendSuccess, sendError } from '../lib/response.js';
-import { requireAuth } from '../middleware/auth.js';
+import { optionalAuth } from '../middleware/auth.js';
 import { db } from '../lib/db.js';
 
 const router = Router();
+
+function getEffectiveUserId(req: Request): string {
+  if (req.user?.id) return req.user.id;
+  const guestHeader = (req.headers['x-guest-id'] || req.headers['x-session-id']) as string | undefined;
+  if (guestHeader && typeof guestHeader === 'string' && guestHeader.trim().length > 0) {
+    return `guest_${guestHeader.trim()}`;
+  }
+  return 'guest_default_user';
+}
 
 const addItemSchema = z.object({
   productId: z.string().min(1, 'Product ID is required'),
@@ -17,21 +26,23 @@ const updateItemSchema = z.object({
 });
 
 // GET /api/cart
-router.get('/cart', requireAuth(), (req: Request, res: Response) => {
-  const cart = db.getCart(req.user!.id);
+router.get('/cart', optionalAuth(), (req: Request, res: Response) => {
+  const userId = getEffectiveUserId(req);
+  const cart = db.getCart(userId);
   sendSuccess(res, cart);
 });
 
 // POST /api/cart/items
-router.post('/cart/items', requireAuth(), (req: Request, res: Response) => {
+router.post('/cart/items', optionalAuth(), (req: Request, res: Response) => {
   const result = addItemSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
     return;
   }
 
+  const userId = getEffectiveUserId(req);
   const { productId, quantity, selectedVariant } = result.data;
-  const resCart = db.addToCart(req.user!.id, productId, quantity, selectedVariant || undefined);
+  const resCart = db.addToCart(userId, productId, quantity, selectedVariant || undefined);
 
   if (!resCart.success) {
     sendError(res, resCart.error || 'Could not add to bag', 'CART_ERROR', 400);
@@ -42,14 +53,15 @@ router.post('/cart/items', requireAuth(), (req: Request, res: Response) => {
 });
 
 // PATCH /api/cart/items/:id
-router.patch('/cart/items/:id', requireAuth(), (req: Request, res: Response) => {
+router.patch('/cart/items/:id', optionalAuth(), (req: Request, res: Response) => {
   const result = updateItemSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
     return;
   }
 
-  const resCart = db.updateCartItem(req.user!.id, String(req.params.id), result.data.quantity);
+  const userId = getEffectiveUserId(req);
+  const resCart = db.updateCartItem(userId, String(req.params.id), result.data.quantity);
   if (!resCart.success) {
     sendError(res, resCart.error || 'Could not update item', 'CART_ERROR', 400);
     return;
@@ -59,14 +71,16 @@ router.patch('/cart/items/:id', requireAuth(), (req: Request, res: Response) => 
 });
 
 // DELETE /api/cart/items/:id
-router.delete('/cart/items/:id', requireAuth(), (req: Request, res: Response) => {
-  const resCart = db.removeFromCart(req.user!.id, String(req.params.id));
+router.delete('/cart/items/:id', optionalAuth(), (req: Request, res: Response) => {
+  const userId = getEffectiveUserId(req);
+  const resCart = db.removeFromCart(userId, String(req.params.id));
   sendSuccess(res, resCart.cart, 'Item removed from School Bag');
 });
 
 // DELETE /api/cart
-router.delete('/cart', requireAuth(), (req: Request, res: Response) => {
-  db.clearCart(req.user!.id);
+router.delete('/cart', optionalAuth(), (req: Request, res: Response) => {
+  const userId = getEffectiveUserId(req);
+  db.clearCart(userId);
   sendSuccess(res, { cleared: true, items: [], subtotal: 0, totalItems: 0 }, 'School Bag emptied');
 });
 

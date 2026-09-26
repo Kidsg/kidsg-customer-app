@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, scryptSync, randomBytes } from 'crypto';
 import { env } from '../config/env.js';
 
 export interface Category {
@@ -85,6 +85,7 @@ export type OrderStatus =
   | 'PENDING_PAYMENT'
   | 'PAYMENT_CONFIRMED'
   | 'CONFIRMED'
+  | 'STORE_ACCEPTED'
   | 'PREPARING'
   | 'READY_FOR_PICKUP'
   | 'PICKED_UP'
@@ -92,6 +93,27 @@ export type OrderStatus =
   | 'DELIVERED'
   | 'CANCELLED'
   | 'REFUNDED';
+
+export interface OrderStatusHistoryItem {
+  id: string;
+  orderId: string;
+  status: OrderStatus;
+  message: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  orderId: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  provider: string;
+  transactionId: string;
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
+  createdAt: string;
+}
 
 export interface OrderItem {
   id: string;
@@ -151,6 +173,9 @@ export class KidsGDatabase {
   private orders: Map<string, Order> = new Map(); // orderId -> Order
   private tickets: SupportTicket[] = [];
   private userProfiles: Map<string, any> = new Map();
+  private userCredentials: Map<string, { userId: string; email: string; passwordHash: string; salt: string }> = new Map();
+  private orderStatusHistory: Map<string, OrderStatusHistoryItem[]> = new Map();
+  private payments: Map<string, PaymentRecord[]> = new Map();
 
   constructor() {
     this.seedInitialData();
@@ -791,7 +816,7 @@ export class KidsGDatabase {
       },
     ];
 
-    // Default development address for user_dev_default
+    // Default test addresses
     const defaultAddress: Address = {
       id: 'addr_dev_default',
       userId: 'user_dev_default',
@@ -810,14 +835,14 @@ export class KidsGDatabase {
     };
     this.addresses.set('user_dev_default', [defaultAddress]);
 
-    // Default Profile
-    this.userProfiles.set('user_dev_default', {
+    // Seeded test profile (Aarav Sharma - student@kidsg.in)
+    const testProfile = {
       id: 'user_dev_default',
       authUserId: 'user_dev_default',
       firstName: 'Aarav',
       lastName: 'Sharma',
       phone: '+91 98765 43210',
-      email: 'aarav@kidsg.in',
+      email: 'student@kidsg.in',
       avatarUrl: '',
       role: 'CUSTOMER',
       onboardingCompleted: true,
@@ -825,7 +850,30 @@ export class KidsGDatabase {
       selectedSchool: 'National Public School, Koramangala',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+    };
+    this.userProfiles.set('user_dev_default', testProfile);
+
+    // Seed deterministic test credentials (Password: KidsGSecure2026!)
+    const testSalt = 'kidsg_secure_salt_2026';
+    const testPassword = 'KidsGSecure2026!';
+    const testHash = this.hashPassword(testPassword, testSalt);
+
+    this.userCredentials.set('student@kidsg.in', {
+      userId: 'user_dev_default',
+      email: 'student@kidsg.in',
+      passwordHash: testHash,
+      salt: testSalt,
     });
+    this.userCredentials.set('aarav@kidsg.in', {
+      userId: 'user_dev_default',
+      email: 'aarav@kidsg.in',
+      passwordHash: testHash,
+      salt: testSalt,
+    });
+  }
+
+  hashPassword(password: string, salt: string): string {
+    return scryptSync(password, salt, 64).toString('hex');
   }
 
   // --- Category Operations ---
@@ -1200,13 +1248,35 @@ export class KidsGDatabase {
     this.orders.set(orderId, order);
     this.clearCart(userId);
 
+    // Persist Payment Record
+    const paymentRecord: PaymentRecord = {
+      id: `pay_${randomUUID().substring(0, 10)}`,
+      orderId,
+      userId,
+      amount: checkout.total,
+      currency: 'INR',
+      provider: 'MOCK',
+      transactionId: `txn_mock_${Date.now()}`,
+      status: 'SUCCESS',
+      createdAt: new Date().toISOString(),
+    };
+    this.payments.set(orderId, [paymentRecord]);
+
+    // Initial Order Status History Record
+    this.addOrderStatusHistory(
+      orderId,
+      'CONFIRMED',
+      'Your stationery order has been placed and confirmed',
+      'CUSTOMER'
+    );
+
     return { success: true, order };
   }
 
   getOrders(userId: string): Order[] {
     const list: Order[] = [];
     for (const ord of this.orders.values()) {
-      if (ord.userId === userId || ord.userId === 'user_dev_default') {
+      if (ord.userId === userId) {
         list.push(ord);
       }
     }
@@ -1216,21 +1286,31 @@ export class KidsGDatabase {
   getOrderById(orderId: string, userId: string): Order | undefined {
     const order = this.orders.get(orderId);
     if (!order) return undefined;
-    if (order.userId === userId || userId === 'user_dev_default') {
+    if (order.userId === userId) {
       return order;
     }
     return undefined;
   }
 
-  // Order State Machine Validation
-  transitionOrderStatus(orderId: string, targetStatus: OrderStatus): { success: boolean; order?: Order; error?: string } {
+  getOrderByIdAdmin(orderId: string): Order | undefined {
+    return this.orders.get(orderId);
+  }
+
+  // Order State Machine Validation with Status History
+  transitionOrderStatus(
+    orderId: string,
+    targetStatus: OrderStatus,
+    message?: string,
+    createdBy = 'SYSTEM'
+  ): { success: boolean; order?: Order; error?: string } {
     const order = this.orders.get(orderId);
     if (!order) return { success: false, error: 'Order not found' };
 
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      PENDING_PAYMENT: ['PAYMENT_CONFIRMED', 'CANCELLED'],
-      PAYMENT_CONFIRMED: ['CONFIRMED', 'CANCELLED', 'REFUNDED'],
-      CONFIRMED: ['PREPARING', 'CANCELLED'],
+      PENDING_PAYMENT: ['PAYMENT_CONFIRMED', 'CONFIRMED', 'CANCELLED'],
+      PAYMENT_CONFIRMED: ['CONFIRMED', 'STORE_ACCEPTED', 'CANCELLED', 'REFUNDED'],
+      CONFIRMED: ['STORE_ACCEPTED', 'PREPARING', 'CANCELLED'],
+      STORE_ACCEPTED: ['PREPARING', 'CANCELLED'],
       PREPARING: ['READY_FOR_PICKUP', 'CANCELLED'],
       READY_FOR_PICKUP: ['PICKED_UP', 'CANCELLED'],
       PICKED_UP: ['OUT_FOR_DELIVERY'],
@@ -1250,6 +1330,24 @@ export class KidsGDatabase {
 
     order.status = targetStatus;
     order.updatedAt = new Date().toISOString();
+
+    const defaultMessages: Partial<Record<OrderStatus, string>> = {
+      STORE_ACCEPTED: 'Shop has accepted your order',
+      PREPARING: 'Your stationery is being packed',
+      READY_FOR_PICKUP: 'Your order is ready for pickup',
+      PICKED_UP: 'Order picked up by delivery partner',
+      OUT_FOR_DELIVERY: 'Your order is on the way',
+      DELIVERED: 'Delivered successfully to your address',
+      CANCELLED: 'Order has been cancelled',
+    };
+
+    this.addOrderStatusHistory(
+      orderId,
+      targetStatus,
+      message || defaultMessages[targetStatus] || `Order status updated to ${targetStatus}`,
+      createdBy
+    );
+
     return { success: true, order };
   }
 
@@ -1263,29 +1361,187 @@ export class KidsGDatabase {
 
     order.status = 'CANCELLED';
     order.updatedAt = new Date().toISOString();
+    this.addOrderStatusHistory(orderId, 'CANCELLED', 'Order cancelled by customer', 'CUSTOMER');
     return { success: true, order };
   }
 
-  // --- Profile Operations ---
-  getProfile(userId: string): any {
-    return this.userProfiles.get(userId) || {
+  // --- Order Status History & Payments ---
+  addOrderStatusHistory(
+    orderId: string,
+    status: OrderStatus,
+    message: string,
+    createdBy = 'SYSTEM'
+  ): OrderStatusHistoryItem {
+    const historyItem: OrderStatusHistoryItem = {
+      id: `hist_${randomUUID().substring(0, 8)}`,
+      orderId,
+      status,
+      message,
+      createdBy,
+      createdAt: new Date().toISOString(),
+    };
+    const existing = this.orderStatusHistory.get(orderId) || [];
+    existing.push(historyItem);
+    this.orderStatusHistory.set(orderId, existing);
+    return historyItem;
+  }
+
+  getOrderStatusHistory(orderId: string): OrderStatusHistoryItem[] {
+    return this.orderStatusHistory.get(orderId) || [];
+  }
+
+  addPaymentRecord(record: PaymentRecord): void {
+    const existing = this.payments.get(record.orderId) || [];
+    existing.push(record);
+    this.payments.set(record.orderId, existing);
+  }
+
+  getPaymentsForOrder(orderId: string): PaymentRecord[] {
+    return this.payments.get(orderId) || [];
+  }
+
+  // --- Shop Owner Operations ---
+  getShopOrders(storeId?: string, statusFilter?: string): Order[] {
+    const targetStoreId = storeId || this.stores[0]?.id;
+    let list = Array.from(this.orders.values()).filter(o => !targetStoreId || o.storeId === targetStoreId);
+    if (statusFilter && statusFilter !== 'ALL') {
+      if (statusFilter === 'NEW') {
+        list = list.filter(o => o.status === 'CONFIRMED');
+      } else if (statusFilter === 'ACTIVE') {
+        list = list.filter(o => ['STORE_ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(o.status));
+      } else if (statusFilter === 'COMPLETED') {
+        list = list.filter(o => o.status === 'DELIVERED');
+      }
+    }
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  shopAcceptOrder(orderId: string, _storeId?: string): { success: boolean; order?: Order; error?: string } {
+    return this.transitionOrderStatus(orderId, 'STORE_ACCEPTED', 'Shop has accepted your order', 'SHOP_OWNER');
+  }
+
+  shopRejectOrder(orderId: string, _storeId?: string, reason?: string): { success: boolean; order?: Order; error?: string } {
+    return this.transitionOrderStatus(
+      orderId,
+      'CANCELLED',
+      reason ? `Order rejected by shop: ${reason}` : 'Shop was unable to accept your order',
+      'SHOP_OWNER'
+    );
+  }
+
+  shopStartPacking(orderId: string, _storeId?: string): { success: boolean; order?: Order; error?: string } {
+    return this.transitionOrderStatus(orderId, 'PREPARING', 'Your stationery is being packed', 'SHOP_OWNER');
+  }
+
+  shopReadyForPickup(orderId: string, _storeId?: string): { success: boolean; order?: Order; error?: string } {
+    return this.transitionOrderStatus(orderId, 'READY_FOR_PICKUP', 'Your order is ready for pickup', 'SHOP_OWNER');
+  }
+
+  advanceDeliveryStatus(
+    orderId: string,
+    nextStatus: 'PICKED_UP' | 'OUT_FOR_DELIVERY' | 'DELIVERED'
+  ): { success: boolean; order?: Order; error?: string } {
+    const res = this.transitionOrderStatus(orderId, nextStatus, undefined, 'DELIVERY_PARTNER');
+    if (res.success && res.order) {
+      res.order.deliveryStatus = nextStatus;
+    }
+    return res;
+  }
+
+  // --- Strict Email-First Authentication & Profile Operations ---
+  checkEmailExists(email: string): { exists: boolean; firstName?: string; user?: any } {
+    const key = email.trim().toLowerCase();
+    const cred = this.userCredentials.get(key);
+    if (cred) {
+      const profile = this.userProfiles.get(cred.userId);
+      return { exists: true, firstName: profile?.firstName, user: profile };
+    }
+    for (const p of this.userProfiles.values()) {
+      if (p.email && p.email.trim().toLowerCase() === key) {
+        return { exists: true, firstName: p.firstName, user: p };
+      }
+    }
+    return { exists: false };
+  }
+
+  registerUser(params: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    selectedClass?: string;
+    selectedSchool?: string;
+  }): { success: boolean; user?: any; error?: string } {
+    const emailKey = params.email.trim().toLowerCase();
+    if (this.checkEmailExists(emailKey).exists) {
+      return { success: false, error: 'An account with this email already exists' };
+    }
+
+    if (!params.password || params.password.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters' };
+    }
+
+    const userId = `user_${randomUUID().substring(0, 10)}`;
+    const salt = randomBytes(16).toString('hex');
+    const passwordHash = this.hashPassword(params.password, salt);
+
+    this.userCredentials.set(emailKey, {
+      userId,
+      email: emailKey,
+      passwordHash,
+      salt,
+    });
+
+    const profile = {
       id: userId,
       authUserId: userId,
-      firstName: 'Student',
-      lastName: 'User',
-      phone: '+919876543210',
-      email: 'student@kidsg.in',
+      firstName: params.firstName.trim(),
+      lastName: (params.lastName || '').trim(),
+      phone: (params.phone || '').trim(),
+      email: emailKey,
+      avatarUrl: '',
       role: 'CUSTOMER',
       onboardingCompleted: true,
-      selectedClass: 'Class 7',
-      selectedSchool: 'School',
+      selectedClass: params.selectedClass || 'Class 7',
+      selectedSchool: params.selectedSchool || 'KidsG Partner School',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    this.userProfiles.set(userId, profile);
+    this.carts.set(userId, []);
+    this.addresses.set(userId, []);
+
+    return { success: true, user: profile };
+  }
+
+  authenticateWithPassword(email: string, password: string): { success: boolean; user?: any; error?: string } {
+    const emailKey = email.trim().toLowerCase();
+    const cred = this.userCredentials.get(emailKey);
+    if (!cred) {
+      return { success: false, error: 'Invalid email or password' };
+    }
+
+    const computedHash = this.hashPassword(password, cred.salt);
+    if (computedHash !== cred.passwordHash) {
+      return { success: false, error: 'Invalid email or password' };
+    }
+
+    const profile = this.userProfiles.get(cred.userId);
+    return { success: true, user: profile };
+  }
+
+  getProfile(userId: string): any {
+    return this.userProfiles.get(userId);
   }
 
   updateProfile(userId: string, updates: any): any {
-    const existing = this.getProfile(userId);
+    const existing = this.getProfile(userId) || {
+      id: userId,
+      authUserId: userId,
+      createdAt: new Date().toISOString(),
+    };
     const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
     this.userProfiles.set(userId, updated);
     return updated;
@@ -1309,11 +1565,11 @@ export class KidsGDatabase {
   }
 
   getSupportTickets(userId: string): SupportTicket[] {
-    return this.tickets.filter(t => t.userId === userId || t.userId === 'user_dev_default');
+    return this.tickets.filter(t => t.userId === userId);
   }
 
   getSupportTicketById(id: string, userId: string): SupportTicket | undefined {
-    return this.tickets.find(t => (t.id === id || t.ticketNumber === id) && (t.userId === userId || t.userId === 'user_dev_default'));
+    return this.tickets.find(t => (t.id === id || t.ticketNumber === id) && t.userId === userId);
   }
 }
 

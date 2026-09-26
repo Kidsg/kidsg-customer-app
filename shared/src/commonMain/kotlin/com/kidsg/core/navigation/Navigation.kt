@@ -16,8 +16,8 @@ sealed interface Screen {
     data object Checkout : Screen
     data object AddAddress : Screen
     data class PaymentMethod(val totalAmount: Double = 290.0, val deliverySpeed: String = "Standard") : Screen
-    data class OrderSuccess(val orderId: String = "KG12345678", val totalAmount: Double = 290.0) : Screen
-    data class OrderTracking(val orderId: String = "KG12345678") : Screen
+    data class OrderSuccess(val orderId: String = "KG-ORDER", val totalAmount: Double = 290.0) : Screen
+    data class OrderTracking(val orderId: String = "KG-ORDER") : Screen
     data object Orders : Screen
     data object Profile : Screen
     data object HelpSupport : Screen

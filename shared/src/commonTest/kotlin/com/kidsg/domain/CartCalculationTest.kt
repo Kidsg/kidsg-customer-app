@@ -31,28 +31,28 @@ class CartCalculationTest {
 
     @Test
     fun testSubtotalBelowThreshold_incursDeliveryFee() {
-        // Classmate notebook: price ₹60 * 2 = ₹120 (< ₹199 threshold)
+        // Classmate notebook: price ₹40 * 2 = ₹80 (< ₹199 threshold)
         val item = CartItem(product = KidsGMockData.products[0], quantity = 2)
         val cart = Cart(items = listOf(item), deliveryConfig = testConfig)
 
         assertEquals(2, cart.itemCount)
-        assertEquals(120.0, cart.subtotal)
+        assertEquals(80.0, cart.subtotal)
         assertFalse(cart.isFreeDeliveryEligible)
         assertEquals(30.0, cart.deliveryFee)
 
-        // Tax: 5% of 120 = 6.0
+        // Tax: 5% of 80 = 4.0
         // Platform fee: 5.0
-        // Final: 120 + 30 + 5 + 6 = 161.0
-        assertEquals(161.0, cart.finalTotal)
+        // Final: 80 + 30 + 5 + 4 = 119.0
+        assertEquals(119.0, cart.finalTotal)
     }
 
     @Test
     fun testSubtotalAboveThreshold_unlocksFreeDelivery() {
-        // Camlin Gel Pen Set: ₹180 * 2 = ₹360 (> ₹199 threshold)
+        // Spiral Notebook: ₹120 * 2 = ₹240 (> ₹199 threshold)
         val item = CartItem(product = KidsGMockData.products[1], quantity = 2)
         val cart = Cart(items = listOf(item), deliveryConfig = testConfig)
 
-        assertEquals(360.0, cart.subtotal)
+        assertEquals(240.0, cart.subtotal)
         assertTrue(cart.isFreeDeliveryEligible)
         assertEquals(0.0, cart.deliveryFee)
     }

@@ -200,6 +200,30 @@ class OrderApi {
 }
 
 class AuthApi {
+    suspend fun checkEmail(email: String): ApiResult<CheckEmailResponseDto> {
+        return safeApiCallWithBody(
+            HttpMethod.Post,
+            Endpoints.AUTH_CHECK_EMAIL,
+            bodyData = CheckEmailRequestDto(email = email.trim())
+        )
+    }
+
+    suspend fun loginPassword(email: String, password: String): ApiResult<VerifyOtpResponseDto> {
+        return safeApiCallWithBody(
+            HttpMethod.Post,
+            Endpoints.AUTH_LOGIN_PASSWORD,
+            bodyData = LoginPasswordRequestDto(email = email.trim(), password = password)
+        )
+    }
+
+    suspend fun signup(request: SignupRequestDto): ApiResult<VerifyOtpResponseDto> {
+        return safeApiCallWithBody(
+            HttpMethod.Post,
+            Endpoints.AUTH_SIGNUP,
+            bodyData = request
+        )
+    }
+
     suspend fun sendOtp(contact: String): ApiResult<SendOtpResponseDto> {
         val trimmed = contact.trim()
         val request = if (trimmed.contains("@")) {

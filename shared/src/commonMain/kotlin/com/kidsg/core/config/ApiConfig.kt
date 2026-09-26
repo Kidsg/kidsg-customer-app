@@ -9,7 +9,7 @@ enum class AppEnvironment(val displayName: String) {
 object ApiConfig {
     var currentEnvironment: AppEnvironment = AppEnvironment.DEV
     var isMockBackend: Boolean = false // Toggle between MockBackend and ProductionBackend
-    var authToken: String? = "dev-token-user_dev_default"
+    var authToken: String? = null
 
     val baseUrl: String
         get() = when (currentEnvironment) {

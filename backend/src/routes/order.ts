@@ -65,13 +65,22 @@ router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
     console.warn('[KidsG][Supabase] Order sync warning:', e?.message);
   }
 
-  // Send notification
+  // Send notification to customer
   await notificationService.send(
     req.user!.id,
     'ORDER_CONFIRMED',
     'Order Placed! 🚀',
     `Your stationery order ${order.orderNumber} is confirmed and sent to the store.`,
     { orderId: order.id, orderNumber: order.orderNumber }
+  );
+
+  // Send persistent notification to shop owner
+  await notificationService.send(
+    'shop_owner_vidya',
+    'NEW_ORDER',
+    'New KidsG order received 🎒',
+    `Order #${order.orderNumber} (${order.items.length} items, ₹${order.total}) requires your attention.`,
+    { orderId: order.id, orderNumber: order.orderNumber, storeId: order.storeId, total: order.total }
   );
 
   sendSuccess(res, order, 'Order placed successfully', 201);
@@ -90,7 +99,11 @@ router.get('/orders/:id', requireAuth(), (req: Request, res: Response) => {
     sendError(res, 'Order not found', 'ORDER_NOT_FOUND', 404);
     return;
   }
-  sendSuccess(res, order);
+  const statusHistory = db.getOrderStatusHistory(order.id);
+  sendSuccess(res, {
+    ...order,
+    statusHistory,
+  });
 });
 
 // POST /api/orders/:id/cancel
@@ -127,7 +140,12 @@ router.get('/orders/:id/tracking', requireAuth(), async (req: Request, res: Resp
     order.status
   );
 
-  sendSuccess(res, tracking);
+  const persistedHistory = db.getOrderStatusHistory(order.id);
+
+  sendSuccess(res, {
+    ...tracking,
+    timeline: persistedHistory,
+  });
 });
 
 export default router;

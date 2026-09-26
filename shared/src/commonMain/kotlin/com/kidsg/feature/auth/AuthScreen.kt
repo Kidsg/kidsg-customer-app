@@ -30,7 +30,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,17 +65,19 @@ import com.kidsg.feature.onboarding.components.KidsGCharacter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class AuthTab {
-    SIGN_IN,
-    SIGN_UP
+enum class AuthStep {
+    ENTER_EMAIL,
+    EXISTING_USER_OPTIONS,
+    PASSWORD_LOGIN,
+    OTP_VERIFICATION,
+    NEW_USER_SIGNUP
 }
 
 /**
- * KidsG Comprehensive Authentication Screen
- * Supports:
- * - Returning User: Email + Password Login (instantly restores desk without repeat setup)
- * - Returning User: Login with OTP (if password forgotten)
- * - New User: Email OTP Verification -> Set Password -> Student Setup
+ * KidsG Strict Email-First Authentication Flow:
+ * SCREEN 1: Enter Email -> Continue
+ * CASE A (Existing User): "Welcome back!" -> Continue with Password OR Continue with OTP
+ * CASE B (New User): Full sign up (First name, Last name, Email, Phone, Password, Grade, School)
  */
 @Composable
 fun AuthScreen(
@@ -85,28 +86,39 @@ fun AuthScreen(
     onBack: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var currentTab by remember { mutableStateOf(AuthTab.SIGN_IN) }
+    var currentStep by remember { mutableStateOf(AuthStep.ENTER_EMAIL) }
 
     var emailInput by remember { mutableStateOf("") }
+    var existingUserName by remember { mutableStateOf("") }
+
+    // Password Login state
     var passwordInput by remember { mutableStateOf("") }
-    var confirmPasswordInput by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
 
-    // OTP verification states
-    var isOtpSent by remember { mutableStateOf(false) }
-    var isSettingPasswordStep by remember { mutableStateOf(false) }
+    // Signup form state
+    var firstNameInput by remember { mutableStateOf("") }
+    var lastNameInput by remember { mutableStateOf("") }
+    var phoneInput by remember { mutableStateOf("") }
+    var signupPasswordInput by remember { mutableStateOf("") }
+    var confirmPasswordInput by remember { mutableStateOf("") }
+    var selectedGrade by remember { mutableStateOf("Class 7") }
+    var schoolNameInput by remember { mutableStateOf("National Public School") }
+
+    // OTP verification state
     var otpInput by remember { mutableStateOf("") }
+    var countdownSeconds by remember { mutableStateOf(30) }
+
+    // Status state
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var infoMessage by remember { mutableStateOf<String?>(null) }
-    var countdownSeconds by remember { mutableStateOf(30) }
 
     val otpFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Resend countdown timer
-    LaunchedEffect(isOtpSent) {
-        if (isOtpSent) {
+    // Resend countdown timer for OTP step
+    LaunchedEffect(currentStep) {
+        if (currentStep == AuthStep.OTP_VERIFICATION) {
             countdownSeconds = 30
             delay(150)
             try {
@@ -141,13 +153,14 @@ fun AuthScreen(
                         .clip(RoundedCornerShape(12.dp))
                         .background(KidsGColors.White)
                         .clickable {
-                            if (isSettingPasswordStep) {
-                                isSettingPasswordStep = false
-                            } else if (isOtpSent) {
-                                isOtpSent = false
-                                errorMessage = null
-                            } else {
-                                onBack()
+                            errorMessage = null
+                            infoMessage = null
+                            when (currentStep) {
+                                AuthStep.ENTER_EMAIL -> onBack()
+                                AuthStep.EXISTING_USER_OPTIONS -> currentStep = AuthStep.ENTER_EMAIL
+                                AuthStep.PASSWORD_LOGIN -> currentStep = AuthStep.EXISTING_USER_OPTIONS
+                                AuthStep.OTP_VERIFICATION -> currentStep = AuthStep.EXISTING_USER_OPTIONS
+                                AuthStep.NEW_USER_SIGNUP -> currentStep = AuthStep.ENTER_EMAIL
                             }
                         },
                     contentAlignment = Alignment.Center
@@ -158,7 +171,7 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Mascot / Character Icon (Displaying selected character from onboarding)
+            // Mascot Character
             val storedCharName = remember { SessionStorage.getSelectedCharacter() }
             val selectedCharacter = remember(storedCharName) {
                 if (storedCharName == CharacterType.GIRL.name) CharacterType.GIRL else CharacterType.BOY
@@ -166,7 +179,7 @@ fun AuthScreen(
 
             Box(
                 modifier = Modifier
-                    .size(92.dp)
+                    .size(88.dp)
                     .clip(CircleShape)
                     .background(Color(0xFFFFF7ED))
                     .padding(8.dp),
@@ -175,17 +188,57 @@ fun AuthScreen(
                 KidsGCharacter(
                     characterType = selectedCharacter,
                     pose = CharacterPose(type = PoseType.EXCITED, isFacingRight = true),
-                    modifier = Modifier.size(76.dp)
+                    modifier = Modifier.size(72.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Main Auth Container
-            if (isSettingPasswordStep) {
-                // STEP 3: SET PASSWORD AFTER OTP VERIFICATION (New User)
+            // Error / Info banners
+            AnimatedVisibility(visible = errorMessage != null, enter = fadeIn(), exit = fadeOut()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFEE2E2))
+                        .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = errorMessage ?: "",
+                        style = KidsGTypography.BodySmall.copy(color = Color(0xFFB91C1C), fontWeight = FontWeight.Medium),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = infoMessage != null, enter = fadeIn(), exit = fadeOut()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFDEF7EC))
+                        .border(1.dp, Color(0xFF31C48D), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = infoMessage ?: "",
+                        style = KidsGTypography.BodySmall.copy(color = Color(0xFF03543F), fontWeight = FontWeight.Medium),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // ==========================================
+            // SCREEN 1: ENTER EMAIL
+            // ==========================================
+            if (currentStep == AuthStep.ENTER_EMAIL) {
                 Text(
-                    text = "Set Your Password 🔒",
+                    text = "Welcome to KidsG 🎒",
                     style = KidsGTypography.DisplaySmall.copy(
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
@@ -194,7 +247,7 @@ fun AuthScreen(
                 )
 
                 Text(
-                    text = "Create a password for quick login to your student desk next time",
+                    text = "Enter your email to access your stationery desk or get started",
                     style = KidsGTypography.BodyMedium.copy(
                         color = KidsGColors.TextSecondary,
                         textAlign = TextAlign.Center
@@ -202,38 +255,22 @@ fun AuthScreen(
                     modifier = Modifier.padding(top = 4.dp, start = 16.dp, end = 16.dp)
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 OutlinedTextField(
-                    value = passwordInput,
-                    onValueChange = { passwordInput = it; errorMessage = null },
+                    value = emailInput,
+                    onValueChange = { emailInput = it; errorMessage = null },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
-                    placeholder = { Text("Create Password (min 6 characters)") },
-                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        Text(
-                            text = if (isPasswordVisible) "👁" else "🙈",
-                            modifier = Modifier.clickable { isPasswordVisible = !isPasswordVisible }.padding(12.dp)
-                        )
-                    },
+                    placeholder = { Text("student@school.com") },
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = KidsGColors.OrangePrimary,
-                        unfocusedBorderColor = KidsGColors.BorderSubtle
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                OutlinedTextField(
-                    value = confirmPasswordInput,
-                    onValueChange = { confirmPasswordInput = it; errorMessage = null },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    placeholder = { Text("Confirm Password") },
-                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { keyboardController?.hide() }
+                    ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = KidsGColors.OrangePrimary,
                         unfocusedBorderColor = KidsGColors.BorderSubtle
@@ -244,44 +281,260 @@ fun AuthScreen(
 
                 Button(
                     onClick = {
-                        if (passwordInput.length < 6) {
-                            errorMessage = "Password must be at least 6 characters long."
-                            return@Button
-                        }
-                        if (passwordInput != confirmPasswordInput) {
-                            errorMessage = "Passwords do not match."
-                            return@Button
-                        }
-                        SessionStorage.savePendingPassword(passwordInput)
                         val email = emailInput.trim().lowercase()
-                        val newProfile = UserProfile(
-                            id = "user_${email.replace("[^a-zA-Z0-9]".toRegex(), "_")}",
-                            name = "Student",
-                            phone = "",
-                            email = email,
-                            studentName = "",
-                            studentGrade = "Class 7",
-                            schoolName = "National Public School"
-                        )
+                        if (email.isBlank() || !email.contains("@") || !email.contains(".")) {
+                            errorMessage = "Please enter a valid email address."
+                            return@Button
+                        }
+
+                        isLoading = true
+                        errorMessage = null
                         coroutineScope.launch {
-                            authRepository.updateProfile(newProfile)
-                            onAuthSuccess(newProfile, false)
+                            val res = authRepository.checkEmail(email)
+                            isLoading = false
+                            res.onSuccess { (exists, name) ->
+                                if (exists) {
+                                    existingUserName = name ?: ""
+                                    currentStep = AuthStep.EXISTING_USER_OPTIONS
+                                } else {
+                                    currentStep = AuthStep.NEW_USER_SIGNUP
+                                }
+                            }.onFailure {
+                                errorMessage = it.message ?: "Failed to verify email. Please try again."
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(14.dp),
+                    enabled = !isLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary)
                 ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            text = "Continue →",
+                            style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+
+            // ==========================================
+            // CASE A: EXISTING USER OPTIONS
+            // ==========================================
+            else if (currentStep == AuthStep.EXISTING_USER_OPTIONS) {
+                Text(
+                    text = "Welcome back${if (existingUserName.isNotBlank()) ", $existingUserName" else ""}! 👋",
+                    style = KidsGTypography.DisplaySmall.copy(
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = KidsGColors.BlackText
+                    ),
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "Your student desk is ready. How would you like to sign in?",
+                    style = KidsGTypography.BodyMedium.copy(
+                        color = KidsGColors.TextSecondary,
+                        textAlign = TextAlign.Center
+                    ),
+                    modifier = Modifier.padding(top = 4.dp, start = 16.dp, end = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Option 1: Continue with Password
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(KidsGColors.White)
+                        .border(1.5.dp, KidsGColors.OrangePrimary, RoundedCornerShape(16.dp))
+                        .clickable {
+                            errorMessage = null
+                            currentStep = AuthStep.PASSWORD_LOGIN
+                        }
+                        .padding(18.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "🔑", fontSize = 24.sp)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Continue with Password",
+                                style = KidsGTypography.TitleMedium.copy(fontWeight = FontWeight.Bold, color = KidsGColors.BlackText)
+                            )
+                            Text(
+                                text = "Sign in directly with your account password",
+                                style = KidsGTypography.BodySmall.copy(color = KidsGColors.TextSecondary)
+                            )
+                        }
+                        Text(text = "→", fontSize = 18.sp, color = KidsGColors.OrangePrimary, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Option 2: Continue with OTP
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(KidsGColors.White)
+                        .border(1.dp, KidsGColors.BorderSubtle, RoundedCornerShape(16.dp))
+                        .clickable {
+                            errorMessage = null
+                            isLoading = true
+                            coroutineScope.launch {
+                                val res = authRepository.requestOtp(emailInput.trim().lowercase())
+                                isLoading = false
+                                res.onSuccess { msg ->
+                                    infoMessage = msg
+                                    currentStep = AuthStep.OTP_VERIFICATION
+                                }.onFailure { err ->
+                                    errorMessage = err.message ?: "Failed to dispatch verification code."
+                                }
+                            }
+                        }
+                        .padding(18.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "📲", fontSize = 24.sp)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Continue with OTP",
+                                style = KidsGTypography.TitleMedium.copy(fontWeight = FontWeight.Bold, color = KidsGColors.BlackText)
+                            )
+                            Text(
+                                text = "Receive a 6-digit code on your email",
+                                style = KidsGTypography.BodySmall.copy(color = KidsGColors.TextSecondary)
+                            )
+                        }
+                        Text(text = "→", fontSize = 18.sp, color = KidsGColors.TextSecondary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // ==========================================
+            // PASSWORD LOGIN STEP
+            // ==========================================
+            else if (currentStep == AuthStep.PASSWORD_LOGIN) {
+                Text(
+                    text = "Enter Password 🔒",
+                    style = KidsGTypography.DisplaySmall.copy(
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = KidsGColors.BlackText
+                    )
+                )
+
+                Text(
+                    text = "Sign in to ${emailInput.trim()}",
+                    style = KidsGTypography.BodyMedium.copy(
+                        color = KidsGColors.TextSecondary,
+                        textAlign = TextAlign.Center
+                    ),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                OutlinedTextField(
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it; errorMessage = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("Enter your account password") },
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        Text(
+                            text = if (isPasswordVisible) "👁" else "🙈",
+                            modifier = Modifier.clickable { isPasswordVisible = !isPasswordVisible }.padding(12.dp)
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = KidsGColors.OrangePrimary,
+                        unfocusedBorderColor = KidsGColors.BorderSubtle
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     Text(
-                        text = "Continue to Student Desk Setup →",
-                        style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                        text = "Login with OTP instead →",
+                        style = KidsGTypography.Caption.copy(
+                            color = KidsGColors.OrangePrimary,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        modifier = Modifier
+                            .clickable {
+                                errorMessage = null
+                                isLoading = true
+                                coroutineScope.launch {
+                                    val res = authRepository.requestOtp(emailInput.trim().lowercase())
+                                    isLoading = false
+                                    res.onSuccess { msg ->
+                                        infoMessage = msg
+                                        currentStep = AuthStep.OTP_VERIFICATION
+                                    }.onFailure { err ->
+                                        errorMessage = err.message ?: "Failed to dispatch verification code."
+                                    }
+                                }
+                            }
+                            .padding(4.dp)
                     )
                 }
 
-            } else if (isOtpSent) {
-                // STEP 2: ENTER OTP (For Sign Up or OTP Login)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        val email = emailInput.trim().lowercase()
+                        if (passwordInput.isBlank()) {
+                            errorMessage = "Please enter your password."
+                            return@Button
+                        }
+                        isLoading = true
+                        errorMessage = null
+                        coroutineScope.launch {
+                            val res = authRepository.loginWithPassword(email, passwordInput)
+                            isLoading = false
+                            res.onSuccess { profile ->
+                                onAuthSuccess(profile, true)
+                            }.onFailure { err ->
+                                errorMessage = err.message ?: "Invalid email or password. Please try again."
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            text = "Sign In →",
+                            style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+
+            // ==========================================
+            // OTP VERIFICATION STEP
+            // ==========================================
+            else if (currentStep == AuthStep.OTP_VERIFICATION) {
                 Text(
-                    text = "Verify Email OTP",
+                    text = "Verify Email OTP ✉️",
                     style = KidsGTypography.DisplaySmall.copy(
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
@@ -300,7 +553,7 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // 6-digit OTP input using BasicTextField with decorationBox for full touch target
+                // 6-digit OTP input boxes
                 BasicTextField(
                     value = otpInput,
                     onValueChange = { newValue ->
@@ -359,21 +612,6 @@ fun AuthScreen(
                     }
                 )
 
-                Text(
-                    text = "Tap to enter the 6-digit verification code",
-                    style = KidsGTypography.BodySmall.copy(
-                        color = KidsGColors.TextMuted,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center
-                    ),
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .clickable {
-                            otpFocusRequester.requestFocus()
-                            keyboardController?.show()
-                        }
-                )
-
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Button(
@@ -388,32 +626,22 @@ fun AuthScreen(
                             val result = authRepository.verifyOtp(emailInput.trim(), otpInput)
                             isLoading = false
                             result.onSuccess { profile ->
-                                // Check if user already exists
-                                val existingAccount = SessionStorage.getAccount(emailInput.trim())
-                                if (existingAccount != null && existingAccount.profile.studentName.isNotBlank()) {
-                                    authRepository.updateProfile(existingAccount.profile)
-                                    onAuthSuccess(existingAccount.profile, true)
-                                } else if (currentTab == AuthTab.SIGN_UP) {
-                                    // New user: proceed to Set Password!
-                                    isSettingPasswordStep = true
-                                } else {
-                                    onAuthSuccess(profile, false)
-                                }
+                                onAuthSuccess(profile, true)
                             }.onFailure { err ->
-                                errorMessage = err.message ?: "Verification failed. Please try again."
+                                errorMessage = err.message ?: "Invalid or expired verification code."
                             }
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary),
-                    enabled = !isLoading && otpInput.length == 6
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary)
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
                         Text(
-                            text = "Verify Code →",
+                            text = "Verify & Sign In →",
                             style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
                         )
                     }
@@ -421,11 +649,9 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Resend OTP Countdown
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     if (countdownSeconds > 0) {
                         Text(
@@ -433,30 +659,30 @@ fun AuthScreen(
                             style = KidsGTypography.BodySmall.copy(color = KidsGColors.TextMuted)
                         )
                     } else {
-                        TextButton(
-                            onClick = {
+                        Text(
+                            text = "Resend OTP",
+                            style = KidsGTypography.BodySmall.copy(
+                                color = KidsGColors.OrangePrimary,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            modifier = Modifier.clickable {
+                                countdownSeconds = 30
                                 coroutineScope.launch {
-                                    authRepository.requestOtp(emailInput.trim())
-                                    countdownSeconds = 30
-                                    infoMessage = "New code dispatched to your email."
+                                    val res = authRepository.requestOtp(emailInput.trim())
+                                    res.onSuccess { msg -> infoMessage = msg }
                                 }
                             }
-                        ) {
-                            Text(
-                                text = "Resend Code",
-                                style = KidsGTypography.BodySmall.copy(
-                                    color = KidsGColors.OrangePrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
+                        )
                     }
                 }
+            }
 
-            } else {
-                // STEP 1: TAB SWITCHER (SIGN IN vs SIGN UP)
+            // ==========================================
+            // CASE B: NEW USER SIGNUP
+            // ==========================================
+            else if (currentStep == AuthStep.NEW_USER_SIGNUP) {
                 Text(
-                    text = if (currentTab == AuthTab.SIGN_IN) "Welcome Back!" else "Create Your Account",
+                    text = "Create Your Account 🎓",
                     style = KidsGTypography.DisplaySmall.copy(
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
@@ -465,282 +691,192 @@ fun AuthScreen(
                 )
 
                 Text(
-                    text = if (currentTab == AuthTab.SIGN_IN)
-                        "Sign in to access your student stationery desk"
-                    else
-                        "Enter your email to get started with KidsG",
+                    text = "Sign up for quick school stationery delivery to your desk",
                     style = KidsGTypography.BodyMedium.copy(
                         color = KidsGColors.TextSecondary,
                         textAlign = TextAlign.Center
                     ),
-                    modifier = Modifier.padding(top = 4.dp, start = 16.dp, end = 16.dp)
+                    modifier = Modifier.padding(top = 4.dp)
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                // Tab Switcher Pill
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(KidsGColors.Surface)
-                        .padding(4.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (currentTab == AuthTab.SIGN_IN) KidsGColors.White else Color.Transparent)
-                            .clickable {
-                                currentTab = AuthTab.SIGN_IN
-                                errorMessage = null
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Sign In",
-                            style = KidsGTypography.BodyMedium.copy(
-                                fontWeight = if (currentTab == AuthTab.SIGN_IN) FontWeight.Bold else FontWeight.Normal,
-                                color = if (currentTab == AuthTab.SIGN_IN) KidsGColors.BlackText else KidsGColors.TextSecondary
-                            )
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (currentTab == AuthTab.SIGN_UP) KidsGColors.White else Color.Transparent)
-                            .clickable {
-                                currentTab = AuthTab.SIGN_UP
-                                errorMessage = null
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Create Account",
-                            style = KidsGTypography.BodyMedium.copy(
-                                fontWeight = if (currentTab == AuthTab.SIGN_UP) FontWeight.Bold else FontWeight.Normal,
-                                color = if (currentTab == AuthTab.SIGN_UP) KidsGColors.BlackText else KidsGColors.TextSecondary
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Email Input
-                OutlinedTextField(
-                    value = emailInput,
-                    onValueChange = { emailInput = it; errorMessage = null },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    placeholder = { Text("Enter your email address") },
-                    leadingIcon = { Text(text = "✉", fontSize = 16.sp, color = KidsGColors.TextMuted) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = KidsGColors.OrangePrimary,
-                        unfocusedBorderColor = KidsGColors.BorderSubtle
-                    )
-                )
-
-                if (currentTab == AuthTab.SIGN_IN) {
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Password Input for Returning User
+                // Name Fields Row
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
-                        value = passwordInput,
-                        onValueChange = { passwordInput = it; errorMessage = null },
-                        modifier = Modifier.fillMaxWidth(),
+                        value = firstNameInput,
+                        onValueChange = { firstNameInput = it; errorMessage = null },
+                        modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp),
-                        placeholder = { Text("Enter your password") },
-                        leadingIcon = { Text(text = "🔒", fontSize = 16.sp, color = KidsGColors.TextMuted) },
-                        trailingIcon = {
-                            Text(
-                                text = if (isPasswordVisible) "👁" else "🙈",
-                                modifier = Modifier.clickable { isPasswordVisible = !isPasswordVisible }.padding(12.dp)
-                            )
-                        },
-                        visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        placeholder = { Text("First Name *") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = KidsGColors.OrangePrimary,
                             unfocusedBorderColor = KidsGColors.BorderSubtle
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Forgot password / Login with OTP option
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Text(
-                            text = "Login with OTP instead",
-                            style = KidsGTypography.Caption.copy(
-                                color = KidsGColors.OrangePrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp
-                            ),
-                            modifier = Modifier
-                                .clickable {
-                                    val email = emailInput.trim()
-                                    if (email.isBlank() || !email.contains("@")) {
-                                        errorMessage = "Please enter your email above first."
-                                        return@clickable
-                                    }
-                                    isLoading = true
-                                    coroutineScope.launch {
-                                        val res = authRepository.requestOtp(email)
-                                        isLoading = false
-                                        res.onSuccess {
-                                            isOtpSent = true
-                                        }.onFailure {
-                                            errorMessage = it.message ?: "Failed to send OTP."
-                                        }
-                                    }
-                                }
-                                .padding(4.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Button(
-                        onClick = {
-                            val email = emailInput.trim().lowercase()
-                            if (email.isBlank() || !email.contains("@")) {
-                                errorMessage = "Please enter a valid email address."
-                                return@Button
-                            }
-                            if (passwordInput.isBlank()) {
-                                errorMessage = "Please enter your password."
-                                return@Button
-                            }
-
-                            // Check local persistent account registry
-                            val account = SessionStorage.getAccount(email)
-                            if (account != null) {
-                                if (account.passwordHash == passwordInput) {
-                                    coroutineScope.launch {
-                                        authRepository.updateProfile(account.profile)
-                                        onAuthSuccess(account.profile, true)
-                                    }
-                                } else {
-                                    errorMessage = "Incorrect password. Please check or use 'Login with OTP'."
-                                }
-                            } else {
-                                // If not registered locally, allow login and create profile
-                                val profile = UserProfile(
-                                    id = "user_${email.replace("[^a-zA-Z0-9]".toRegex(), "_")}",
-                                    name = "Student",
-                                    phone = "",
-                                    email = email,
-                                    studentName = "Aarav Sharma",
-                                    studentGrade = "Class 7",
-                                    schoolName = "National Public School"
-                                )
-                                SessionStorage.saveAccount(
-                                    SessionStorage.AccountRecord(email = email, passwordHash = passwordInput, profile = profile)
-                                )
-                                coroutineScope.launch {
-                                    authRepository.updateProfile(profile)
-                                    onAuthSuccess(profile, true)
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                    OutlinedTextField(
+                        value = lastNameInput,
+                        onValueChange = { lastNameInput = it; errorMessage = null },
+                        modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary)
-                    ) {
+                        placeholder = { Text("Last Name") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = KidsGColors.OrangePrimary,
+                            unfocusedBorderColor = KidsGColors.BorderSubtle
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Email Field (prefilled)
+                OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = { emailInput = it; errorMessage = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("Email *") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = KidsGColors.OrangePrimary,
+                        unfocusedBorderColor = KidsGColors.BorderSubtle
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Mobile Number Field
+                OutlinedTextField(
+                    value = phoneInput,
+                    onValueChange = { phoneInput = it; errorMessage = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("Mobile Number (optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = KidsGColors.OrangePrimary,
+                        unfocusedBorderColor = KidsGColors.BorderSubtle
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Password Field
+                OutlinedTextField(
+                    value = signupPasswordInput,
+                    onValueChange = { signupPasswordInput = it; errorMessage = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("Create Password (min 6 characters) *") },
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
                         Text(
-                            text = "Sign In →",
+                            text = if (isPasswordVisible) "👁" else "🙈",
+                            modifier = Modifier.clickable { isPasswordVisible = !isPasswordVisible }.padding(12.dp)
+                        )
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = KidsGColors.OrangePrimary,
+                        unfocusedBorderColor = KidsGColors.BorderSubtle
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Confirm Password Field
+                OutlinedTextField(
+                    value = confirmPasswordInput,
+                    onValueChange = { confirmPasswordInput = it; errorMessage = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("Confirm Password *") },
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = KidsGColors.OrangePrimary,
+                        unfocusedBorderColor = KidsGColors.BorderSubtle
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // School Name Field
+                OutlinedTextField(
+                    value = schoolNameInput,
+                    onValueChange = { schoolNameInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("School / College Name") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = KidsGColors.OrangePrimary,
+                        unfocusedBorderColor = KidsGColors.BorderSubtle
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = {
+                        if (firstNameInput.isBlank()) {
+                            errorMessage = "Please enter your first name."
+                            return@Button
+                        }
+                        if (emailInput.isBlank() || !emailInput.contains("@")) {
+                            errorMessage = "Please enter a valid email address."
+                            return@Button
+                        }
+                        if (signupPasswordInput.length < 6) {
+                            errorMessage = "Password must be at least 6 characters long."
+                            return@Button
+                        }
+                        if (signupPasswordInput != confirmPasswordInput) {
+                            errorMessage = "Passwords do not match."
+                            return@Button
+                        }
+
+                        isLoading = true
+                        errorMessage = null
+                        coroutineScope.launch {
+                            val res = authRepository.signup(
+                                firstName = firstNameInput.trim(),
+                                lastName = lastNameInput.trim(),
+                                email = emailInput.trim().lowercase(),
+                                phone = phoneInput.trim(),
+                                password = signupPasswordInput,
+                                selectedClass = selectedGrade,
+                                selectedSchool = schoolNameInput.trim().ifBlank { "KidsG Partner School" }
+                            )
+                            isLoading = false
+                            res.onSuccess { profile ->
+                                onAuthSuccess(profile, false)
+                            }.onFailure { err ->
+                                errorMessage = err.message ?: "Failed to create account. Please try again."
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            text = "Create Account & Start Learning →",
                             style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
                         )
                     }
-
-                } else {
-                    // SIGN UP (SEND OTP)
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            val email = emailInput.trim()
-                            if (email.isBlank() || !email.contains("@")) {
-                                errorMessage = "Please enter a valid email address."
-                                return@Button
-                            }
-                            isLoading = true
-                            errorMessage = null
-                            coroutineScope.launch {
-                                val result = authRepository.requestOtp(email)
-                                isLoading = false
-                                result.onSuccess {
-                                    isOtpSent = true
-                                    otpInput = ""
-                                }.onFailure { err ->
-                                    errorMessage = err.message ?: "Failed to send verification code."
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = KidsGColors.OrangePrimary),
-                        enabled = !isLoading
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                        } else {
-                            Text(
-                                text = "Send 6-Digit OTP →",
-                                style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
-                            )
-                        }
-                    }
                 }
             }
 
-            // Error / Info Messages
-            AnimatedVisibility(visible = errorMessage != null, enter = fadeIn(), exit = fadeOut()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFFEF2F2))
-                        .border(1.dp, Color(0xFFFCA5A5), RoundedCornerShape(10.dp))
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text = errorMessage ?: "",
-                        style = KidsGTypography.Caption.copy(color = Color(0xFFDC2626), fontWeight = FontWeight.SemiBold)
-                    )
-                }
-            }
-
-            AnimatedVisibility(visible = infoMessage != null, enter = fadeIn(), exit = fadeOut()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFF0FDF4))
-                        .border(1.dp, Color(0xFF86EFAC), RoundedCornerShape(10.dp))
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text = infoMessage ?: "",
-                        style = KidsGTypography.Caption.copy(color = Color(0xFF16A34A), fontWeight = FontWeight.SemiBold)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

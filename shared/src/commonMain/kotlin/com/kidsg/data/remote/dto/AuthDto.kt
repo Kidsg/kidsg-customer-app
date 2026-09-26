@@ -67,3 +67,31 @@ data class MeResponseDto(
     val profile: ProfileDto? = null,
     val addresses: List<AddressDto> = emptyList()
 )
+
+@Serializable
+data class CheckEmailRequestDto(
+    val email: String
+)
+
+@Serializable
+data class CheckEmailResponseDto(
+    val exists: Boolean,
+    val firstName: String? = null
+)
+
+@Serializable
+data class LoginPasswordRequestDto(
+    val email: String,
+    val password: String
+)
+
+@Serializable
+data class SignupRequestDto(
+    val firstName: String,
+    val lastName: String = "",
+    val email: String,
+    val phone: String = "",
+    val password: String,
+    val selectedClass: String = "Class 7",
+    val selectedSchool: String = "KidsG Partner School"
+)

@@ -27,6 +27,78 @@ class ProductionAuthRepository(
 
     override val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
+    override suspend fun checkEmail(email: String): Result<Pair<Boolean, String?>> {
+        return when (val res = authApi.checkEmail(email)) {
+            is ApiResult.Success -> Result.success(Pair(res.data.exists, res.data.firstName))
+            is ApiResult.Error -> Result.failure(Exception(res.exception.userFriendlyMessage))
+        }
+    }
+
+    override suspend fun loginWithPassword(email: String, password: String): Result<UserProfile> {
+        return when (val res = authApi.loginPassword(email, password)) {
+            is ApiResult.Success -> {
+                ApiConfig.authToken = res.data.token
+                SessionStorage.saveAuthToken(res.data.token)
+                val profile = UserProfile(
+                    id = res.data.user.id,
+                    name = "${res.data.user.firstName ?: "Student"} ${res.data.user.lastName ?: ""}".trim(),
+                    phone = res.data.user.phone ?: "",
+                    email = res.data.user.email ?: email,
+                    studentName = res.data.user.firstName ?: "Student",
+                    studentGrade = res.data.profile?.selectedClass ?: "Class 7",
+                    schoolName = res.data.profile?.selectedSchool ?: "KidsG Partner School"
+                )
+                _currentUser.value = profile
+                SessionStorage.saveUserProfile(profile)
+                Result.success(profile)
+            }
+            is ApiResult.Error -> {
+                Result.failure(Exception(res.exception.userFriendlyMessage))
+            }
+        }
+    }
+
+    override suspend fun signup(
+        firstName: String,
+        lastName: String,
+        email: String,
+        phone: String,
+        password: String,
+        selectedClass: String,
+        selectedSchool: String
+    ): Result<UserProfile> {
+        val request = com.kidsg.data.remote.dto.SignupRequestDto(
+            firstName = firstName,
+            lastName = lastName,
+            email = email,
+            phone = phone,
+            password = password,
+            selectedClass = selectedClass,
+            selectedSchool = selectedSchool
+        )
+        return when (val res = authApi.signup(request)) {
+            is ApiResult.Success -> {
+                ApiConfig.authToken = res.data.token
+                SessionStorage.saveAuthToken(res.data.token)
+                val profile = UserProfile(
+                    id = res.data.user.id,
+                    name = "$firstName $lastName".trim(),
+                    phone = phone,
+                    email = email,
+                    studentName = firstName,
+                    studentGrade = selectedClass,
+                    schoolName = selectedSchool
+                )
+                _currentUser.value = profile
+                SessionStorage.saveUserProfile(profile)
+                Result.success(profile)
+            }
+            is ApiResult.Error -> {
+                Result.failure(Exception(res.exception.userFriendlyMessage))
+            }
+        }
+    }
+
     override suspend fun requestOtp(phoneNumber: String): Result<String> {
         return when (val res = authApi.sendOtp(phoneNumber)) {
             is ApiResult.Success -> Result.success(res.message ?: "Verification code sent")

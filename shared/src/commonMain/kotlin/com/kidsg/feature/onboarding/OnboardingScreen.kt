@@ -59,6 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kidsg.core.designsystem.KidsGColors
+import com.kidsg.core.designsystem.KidsGResourceImage
 import com.kidsg.core.designsystem.KidsGTypography
 import com.kidsg.core.storage.SessionStorage
 import com.kidsg.feature.onboarding.components.CharacterSelectionCard
@@ -66,6 +67,7 @@ import com.kidsg.feature.onboarding.components.FloatingStationeryBackground
 import com.kidsg.feature.onboarding.components.KidsGCharacter
 import com.kidsg.feature.onboarding.components.PencilTransitionOverlay
 import com.kidsg.feature.onboarding.components.StationeryTrolley
+import androidx.compose.ui.layout.ContentScale
 
 /**
  * KidsG Interactive Character-Selection Onboarding Screen
@@ -283,32 +285,25 @@ fun OnboardingScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
+                                        .fillMaxWidth(0.9f)
                                         .clip(RoundedCornerShape(28.dp))
                                         .background(Color(0xFFFFF7ED))
                                         .border(1.5.dp, Color(0xFFFFD8A8), RoundedCornerShape(28.dp))
-                                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                                        .padding(10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.Bottom
-                                    ) {
-                                        // Selected Character standing proudly
-                                        KidsGCharacter(
-                                            characterType = state.selectedCharacter ?: CharacterType.BOY,
-                                            pose = CharacterPose(type = PoseType.EXCITED, isFacingRight = true),
-                                            modifier = Modifier.size(150.dp)
-                                        )
+                                    val isGirl = state.selectedCharacter == CharacterType.GIRL
+                                    val resName = if (isGirl) "kidsg_girl_welcome" else "kidsg_boy_welcome"
 
-                                        Spacer(modifier = Modifier.width(16.dp))
-
-                                        // Stationery Trolley filled with school supplies
-                                        StationeryTrolley(
-                                            modifier = Modifier.size(130.dp),
-                                            wheelRotationDegrees = 0f,
-                                            isFilled = true
-                                        )
-                                    }
+                                    KidsGResourceImage(
+                                        resName = resName,
+                                        contentDescription = if (isGirl) "KidsG Girl Student with Stationery Trolley" else "KidsG Boy Student with Stationery Trolley",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(20.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
                                 }
 
                                 Spacer(modifier = Modifier.height(18.dp))
@@ -454,12 +449,12 @@ private fun TopOnboardingHeader(onSkip: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // KidsG Pill Badge
+        // KidsG Pill Badge (Clean crisp white, no grey shadow)
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(KidsGColors.White)
-                .shadow(2.dp, RoundedCornerShape(12.dp))
+                .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(16.dp))
                 .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -482,12 +477,12 @@ private fun TopOnboardingHeader(onSkip: () -> Unit) {
             }
         }
 
-        // Skip Button
+        // Skip Button (Clean crisp white, no grey shadow)
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(KidsGColors.White)
-                .shadow(1.dp, RoundedCornerShape(12.dp))
+                .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(16.dp))
                 .clickable { onSkip() }
                 .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {

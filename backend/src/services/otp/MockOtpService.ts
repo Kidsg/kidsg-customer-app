@@ -57,10 +57,7 @@ export class MockOtpService implements OtpService {
       return { success: false, message: 'Too many invalid attempts. Please request a new code.' };
     }
 
-    // Allow standard testing/development bypass '123456' in non-production mode
-    const isDevBypass = process.env.NODE_ENV !== 'production' && inputOtp.trim() === '123456';
-
-    if (stored.otp !== inputOtp.trim() && !isDevBypass) {
+    if (stored.otp !== inputOtp.trim()) {
       return { success: false, message: 'Invalid verification code' };
     }
 

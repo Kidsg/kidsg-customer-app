@@ -52,10 +52,13 @@ fun PaymentMethodScreen(
     deliverySpeed: String = "Standard",
     onBack: () -> Unit,
     onPaymentSuccess: (orderId: String) -> Unit,
+    orderRepository: com.kidsg.domain.repository.OrderRepository = remember { com.kidsg.data.repository.RepositoryProvider.orderRepository },
+    cartRepository: com.kidsg.domain.repository.CartRepository = remember { com.kidsg.data.repository.RepositoryProvider.cartRepository },
     modifier: Modifier = Modifier
 ) {
     var selectedMethod by remember { mutableStateOf("UPI") }
     var isProcessing by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
     Column(
@@ -204,16 +207,45 @@ fun PaymentMethodScreen(
                 }
             } else {
                 KidsGPrimaryButton(
-                    text = "🔒 Pay Now",
+                    text = "🔒 Pay ₹${totalAmount.toInt()}",
                     onClick = {
                         isProcessing = true
+                        errorMessage = null
                         coroutineScope.launch {
-                            delay(1200)
-                            val randomNum = (10000000..99999999).random()
-                            val newOrderId = "KG$randomNum"
-                            onPaymentSuccess(newOrderId)
+                            val items = cartRepository.cartState.value.items
+                            val defaultAddr = com.kidsg.domain.model.Address(
+                                id = "addr_default",
+                                label = "Home",
+                                recipientName = "Student",
+                                phoneNumber = "+91 98765 43210",
+                                addressLine1 = "KidsG Desk Delivery",
+                                addressLine2 = "",
+                                city = "Bengaluru",
+                                pincode = "560034",
+                                isDefault = true
+                            )
+                            val result = orderRepository.createOrder(
+                                items = items,
+                                deliveryAddress = defaultAddr,
+                                paymentMethod = selectedMethod
+                            )
+                            isProcessing = false
+                            result.onSuccess { order ->
+                                onPaymentSuccess(order.displayOrderId)
+                            }.onFailure { err ->
+                                errorMessage = err.message ?: "Failed to process payment and place order."
+                            }
                         }
                     }
+                )
+            }
+
+            if (errorMessage != null) {
+                Spacer(modifier = Modifier.height(KidsGSpacing.sm))
+                Text(
+                    text = errorMessage ?: "",
+                    style = KidsGTypography.BodySmall.copy(color = Color(0xFFDC2626)),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 

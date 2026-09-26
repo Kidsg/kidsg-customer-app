@@ -364,14 +364,6 @@ fun StudentSetupScreen(
                             isParentMode = isParentMode
                         )
                         authRepository.updateProfile(updated)
-                        val pwd = com.kidsg.core.storage.SessionStorage.getPendingPassword() ?: "Kidsg@123"
-                        com.kidsg.core.storage.SessionStorage.saveAccount(
-                            com.kidsg.core.storage.SessionStorage.AccountRecord(
-                                email = updated.email,
-                                passwordHash = pwd,
-                                profile = updated
-                            )
-                        )
                         onSetupComplete()
                     }
                 },

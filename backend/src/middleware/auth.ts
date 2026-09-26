@@ -33,9 +33,12 @@ export function extractBearerToken(req: Request): string | null {
 
 export async function parseToken(token: string): Promise<AuthenticatedUser | null> {
   // 1. KidsG Session Tokens
-  if (token.startsWith('kidsg-jwt-')) {
-    const userId = token.replace('kidsg-jwt-', '');
+  if (token.startsWith('kidsg-jwt-') || token.startsWith('dev-token-')) {
+    const userId = token.replace('kidsg-jwt-', '').replace('dev-token-', '');
     const profile = db.getProfile(userId);
+    if (!profile) {
+      return null;
+    }
     return {
       id: userId,
       authUserId: userId,
@@ -44,21 +47,6 @@ export async function parseToken(token: string): Promise<AuthenticatedUser | nul
       role: (profile?.role as UserRole) || 'CUSTOMER',
       firstName: profile?.firstName || 'Student',
       lastName: profile?.lastName || '',
-    };
-  }
-
-  // 2. Development & Mock Tokens
-  if (token.startsWith('dev-token-') || token.startsWith('mock-token-') || token === 'dev_token') {
-    const userId = token.replace('dev-token-', '').replace('mock-token-', '');
-    const isMockAdmin = token.includes('admin');
-    return {
-      id: userId || 'user_dev_default',
-      authUserId: userId || 'user_dev_default',
-      phone: '+919876543210',
-      email: isMockAdmin ? 'admin@kidsg.in' : 'student@kidsg.in',
-      role: isMockAdmin ? 'ADMIN' : 'CUSTOMER',
-      firstName: isMockAdmin ? 'KidsG' : 'Aarav',
-      lastName: isMockAdmin ? 'Admin' : 'Sharma',
     };
   }
 

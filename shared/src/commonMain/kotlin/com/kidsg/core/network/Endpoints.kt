@@ -4,6 +4,8 @@ object Endpoints {
     const val HEALTH = "/api/health"
 
     // Auth
+    const val AUTH_CHECK_EMAIL = "/api/auth/check-email"
+    const val AUTH_LOGIN_PASSWORD = "/api/auth/login-password"
     const val AUTH_SIGNUP = "/api/auth/signup"
     const val AUTH_LOGIN = "/api/auth/login"
     const val AUTH_LOGOUT = "/api/auth/logout"

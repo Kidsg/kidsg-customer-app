@@ -19,17 +19,86 @@ class MockAuthRepository : AuthRepository {
     private val _currentUser = MutableStateFlow<UserProfile?>(KidsGMockData.defaultUser)
     override val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
+    private val registeredUsers = mutableMapOf<String, UserProfile>(
+        "student@kidsg.in" to KidsGMockData.defaultUser,
+        "aarav@kidsg.in" to KidsGMockData.defaultUser
+    )
+    private val userPasswords = mutableMapOf<String, String>(
+        "student@kidsg.in" to "KidsGSecure2026!",
+        "aarav@kidsg.in" to "KidsGSecure2026!"
+    )
+    private var lastOtp: String? = null
+
+    override suspend fun checkEmail(email: String): Result<Pair<Boolean, String?>> {
+        val clean = email.trim().lowercase()
+        val user = registeredUsers[clean]
+        return if (user != null) {
+            Result.success(Pair(true, user.studentName.ifBlank { user.name.split(" ").firstOrNull() ?: "Student" }))
+        } else {
+            Result.success(Pair(false, null))
+        }
+    }
+
+    override suspend fun loginWithPassword(email: String, password: String): Result<UserProfile> {
+        val clean = email.trim().lowercase()
+        val storedPass = userPasswords[clean]
+        if (storedPass == null || storedPass != password) {
+            return Result.failure(IllegalArgumentException("Invalid email or password"))
+        }
+        val user = registeredUsers[clean] ?: KidsGMockData.defaultUser.copy(email = clean)
+        _currentUser.value = user
+        SessionStorage.saveUserProfile(user)
+        return Result.success(user)
+    }
+
+    override suspend fun signup(
+        firstName: String,
+        lastName: String,
+        email: String,
+        phone: String,
+        password: String,
+        selectedClass: String,
+        selectedSchool: String
+    ): Result<UserProfile> {
+        val clean = email.trim().lowercase()
+        if (registeredUsers.containsKey(clean)) {
+            return Result.failure(IllegalArgumentException("An account with this email already exists"))
+        }
+        if (password.length < 6) {
+            return Result.failure(IllegalArgumentException("Password must be at least 6 characters"))
+        }
+        val newUser = UserProfile(
+            id = "user_${clean.replace("[^a-zA-Z0-9]".toRegex(), "_")}",
+            name = "$firstName $lastName".trim(),
+            phone = phone,
+            email = clean,
+            studentName = firstName,
+            studentGrade = selectedClass,
+            schoolName = selectedSchool
+        )
+        registeredUsers[clean] = newUser
+        userPasswords[clean] = password
+        _currentUser.value = newUser
+        SessionStorage.saveUserProfile(newUser)
+        return Result.success(newUser)
+    }
+
     override suspend fun requestOtp(phoneNumber: String): Result<String> {
-        return Result.success("Verification code sent to $phoneNumber")
+        lastOtp = (100000..999999).random().toString()
+        return Result.success("Verification code sent to $phoneNumber (Code: $lastOtp)")
     }
 
     override suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<UserProfile> {
-        if (otpCode.length == 4) {
-            val user = KidsGMockData.defaultUser.copy(phone = phoneNumber)
-            _currentUser.value = user
-            return Result.success(user)
+        val clean = phoneNumber.trim().lowercase()
+        // Must match either last generated OTP or valid 6-digit code
+        if (lastOtp != null && otpCode.trim() != lastOtp) {
+            return Result.failure(IllegalArgumentException("Invalid verification code. Please check and try again."))
         }
-        return Result.failure(IllegalArgumentException("Invalid OTP code. Enter 4 digits."))
+        val existing = registeredUsers[clean]
+        val user = existing ?: KidsGMockData.defaultUser.copy(email = clean, phone = phoneNumber)
+        _currentUser.value = user
+        SessionStorage.saveUserProfile(user)
+        return Result.success(user)
     }
 
     override suspend fun updateProfile(profile: UserProfile): Result<UserProfile> {
@@ -87,5 +156,11 @@ class MockOrderRepository : OrderRepository {
             list.map { if (it.id == orderId) it.copy(status = OrderStatus.CANCELLED) else it }
         }
         return Result.success(true)
+    }
+
+    override suspend fun getOrders(): Result<List<Order>> {
+        val current = SessionStorage.getSavedOrders()
+        orders.value = current
+        return Result.success(current)
     }
 }

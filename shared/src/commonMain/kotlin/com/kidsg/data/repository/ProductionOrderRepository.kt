@@ -87,4 +87,21 @@ class ProductionOrderRepository(
             }
         }
     }
+
+    override suspend fun getOrders(): Result<List<Order>> {
+        return when (val res = orderApi.getOrders()) {
+            is ApiResult.Success -> {
+                val domainOrders = res.data.map { it.toDomain() }
+                ordersFlow.value = domainOrders
+                Result.success(domainOrders)
+            }
+            is ApiResult.Error -> {
+                if (ordersFlow.value.isNotEmpty()) {
+                    Result.success(ordersFlow.value)
+                } else {
+                    Result.failure(Exception(res.exception.userFriendlyMessage))
+                }
+            }
+        }
+    }
 }

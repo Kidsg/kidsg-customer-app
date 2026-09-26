@@ -20,6 +20,7 @@ import checkoutRoutes from './routes/checkout.js';
 import paymentRoutes from './routes/payment.js';
 import orderRoutes from './routes/order.js';
 import notificationRoutes from './routes/notification.js';
+import shopRoutes from './routes/shop.js';
 
 const app = express();
 
@@ -68,6 +69,7 @@ app.use('/api', checkoutRoutes);
 app.use('/api', paymentRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', notificationRoutes);
+app.use('/api', shopRoutes);
 
 // Root Health Fallback
 app.get('/', (_req: Request, res: Response) => {

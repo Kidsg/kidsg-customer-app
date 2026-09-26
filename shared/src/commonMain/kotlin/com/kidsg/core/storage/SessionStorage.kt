@@ -1,5 +1,6 @@
 package com.kidsg.core.storage
 
+import com.kidsg.domain.model.CartItem
 import com.kidsg.domain.model.UserProfile
 import kotlinx.serialization.json.Json
 
@@ -93,47 +94,11 @@ object SessionStorage {
     }
 
     @kotlinx.serialization.Serializable
-    data class AccountRecord(
-        val email: String,
-        val passwordHash: String,
-        val profile: UserProfile
-    )
-
-    @kotlinx.serialization.Serializable
-    private data class AccountsWrapper(
-        val accounts: Map<String, AccountRecord> = emptyMap()
-    )
-
-    @kotlinx.serialization.Serializable
     private data class OrdersWrapper(
         val orders: List<com.kidsg.domain.model.Order> = emptyList()
     )
 
-    private const val KEY_ACCOUNTS_MAP = "kidsg_accounts_map"
     private const val KEY_SAVED_ORDERS = "kidsg_saved_orders"
-
-    fun getAccounts(): Map<String, AccountRecord> {
-        val raw = platformGetString(KEY_ACCOUNTS_MAP) ?: return emptyMap()
-        return try {
-            json.decodeFromString<AccountsWrapper>(raw).accounts
-        } catch (_: Exception) {
-            emptyMap()
-        }
-    }
-
-    fun saveAccount(account: AccountRecord) {
-        val current = getAccounts().toMutableMap()
-        current[account.email.trim().lowercase()] = account
-        try {
-            val raw = json.encodeToString(AccountsWrapper.serializer(), AccountsWrapper(current))
-            platformPutString(KEY_ACCOUNTS_MAP, raw)
-        } catch (_: Exception) {
-        }
-    }
-
-    fun getAccount(email: String): AccountRecord? {
-        return getAccounts()[email.trim().lowercase()]
-    }
 
     fun getSavedOrders(): List<com.kidsg.domain.model.Order> {
         val raw = platformGetString(KEY_SAVED_ORDERS) ?: return emptyList()
@@ -157,24 +122,33 @@ object SessionStorage {
         saveOrders(listOf(order) + current.filterNot { it.id == order.id })
     }
 
-    private const val KEY_PENDING_PASSWORD = "kidsg_pending_password"
+    @kotlinx.serialization.Serializable
+    private data class CartWrapper(
+        val items: List<CartItem> = emptyList()
+    )
 
-    fun savePendingPassword(password: String?) {
-        if (password != null) {
-            platformPutString(KEY_PENDING_PASSWORD, password)
-        } else {
-            platformRemove(KEY_PENDING_PASSWORD)
+    private const val KEY_SAVED_CART = "kidsg_saved_cart"
+
+    fun getSavedCartItems(): List<CartItem> {
+        val raw = platformGetString(KEY_SAVED_CART) ?: return emptyList()
+        return try {
+            json.decodeFromString<CartWrapper>(raw).items
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
-    fun getPendingPassword(): String? {
-        return platformGetString(KEY_PENDING_PASSWORD)
+    fun saveCartItems(items: List<CartItem>) {
+        try {
+            val raw = json.encodeToString(CartWrapper.serializer(), CartWrapper(items))
+            platformPutString(KEY_SAVED_CART, raw)
+        } catch (_: Exception) {
+        }
     }
 
     fun clearSession() {
         platformRemove(KEY_AUTH_TOKEN)
         platformRemove(KEY_USER_PROFILE)
         platformRemove(KEY_IS_LOGGED_IN)
-        platformRemove(KEY_PENDING_PASSWORD)
     }
 }

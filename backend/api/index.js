@@ -200,9 +200,10 @@ if (isConfigured) {
   supabaseAuthClient = supabaseClient;
 }
 var supabaseAdmin = supabaseClient;
+var supabaseAuth = supabaseAuthClient;
 
 // src/lib/db.ts
-import { randomUUID } from "crypto";
+import { randomUUID, scryptSync, randomBytes } from "crypto";
 var KidsGDatabase = class {
   categories = [];
   products = [];
@@ -220,6 +221,9 @@ var KidsGDatabase = class {
   // orderId -> Order
   tickets = [];
   userProfiles = /* @__PURE__ */ new Map();
+  userCredentials = /* @__PURE__ */ new Map();
+  orderStatusHistory = /* @__PURE__ */ new Map();
+  payments = /* @__PURE__ */ new Map();
   constructor() {
     this.seedInitialData();
   }
@@ -858,13 +862,13 @@ var KidsGDatabase = class {
       isDefault: true
     };
     this.addresses.set("user_dev_default", [defaultAddress]);
-    this.userProfiles.set("user_dev_default", {
+    const testProfile = {
       id: "user_dev_default",
       authUserId: "user_dev_default",
       firstName: "Aarav",
       lastName: "Sharma",
       phone: "+91 98765 43210",
-      email: "aarav@kidsg.in",
+      email: "student@kidsg.in",
       avatarUrl: "",
       role: "CUSTOMER",
       onboardingCompleted: true,
@@ -872,7 +876,26 @@ var KidsGDatabase = class {
       selectedSchool: "National Public School, Koramangala",
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.userProfiles.set("user_dev_default", testProfile);
+    const testSalt = "kidsg_secure_salt_2026";
+    const testPassword = "KidsGSecure2026!";
+    const testHash = this.hashPassword(testPassword, testSalt);
+    this.userCredentials.set("student@kidsg.in", {
+      userId: "user_dev_default",
+      email: "student@kidsg.in",
+      passwordHash: testHash,
+      salt: testSalt
     });
+    this.userCredentials.set("aarav@kidsg.in", {
+      userId: "user_dev_default",
+      email: "aarav@kidsg.in",
+      passwordHash: testHash,
+      salt: testSalt
+    });
+  }
+  hashPassword(password, salt) {
+    return scryptSync(password, salt, 64).toString("hex");
   }
   // --- Category Operations ---
   getCategories() {
@@ -1163,12 +1186,30 @@ var KidsGDatabase = class {
     };
     this.orders.set(orderId, order);
     this.clearCart(userId);
+    const paymentRecord = {
+      id: `pay_${randomUUID().substring(0, 10)}`,
+      orderId,
+      userId,
+      amount: checkout.total,
+      currency: "INR",
+      provider: "MOCK",
+      transactionId: `txn_mock_${Date.now()}`,
+      status: "SUCCESS",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.payments.set(orderId, [paymentRecord]);
+    this.addOrderStatusHistory(
+      orderId,
+      "CONFIRMED",
+      "Your stationery order has been placed and confirmed",
+      "CUSTOMER"
+    );
     return { success: true, order };
   }
   getOrders(userId) {
     const list = [];
     for (const ord of this.orders.values()) {
-      if (ord.userId === userId || ord.userId === "user_dev_default") {
+      if (ord.userId === userId) {
         list.push(ord);
       }
     }
@@ -1177,19 +1218,23 @@ var KidsGDatabase = class {
   getOrderById(orderId, userId) {
     const order = this.orders.get(orderId);
     if (!order) return void 0;
-    if (order.userId === userId || userId === "user_dev_default") {
+    if (order.userId === userId) {
       return order;
     }
     return void 0;
   }
-  // Order State Machine Validation
-  transitionOrderStatus(orderId, targetStatus) {
+  getOrderByIdAdmin(orderId) {
+    return this.orders.get(orderId);
+  }
+  // Order State Machine Validation with Status History
+  transitionOrderStatus(orderId, targetStatus, message, createdBy = "SYSTEM") {
     const order = this.orders.get(orderId);
     if (!order) return { success: false, error: "Order not found" };
     const validTransitions = {
-      PENDING_PAYMENT: ["PAYMENT_CONFIRMED", "CANCELLED"],
-      PAYMENT_CONFIRMED: ["CONFIRMED", "CANCELLED", "REFUNDED"],
-      CONFIRMED: ["PREPARING", "CANCELLED"],
+      PENDING_PAYMENT: ["PAYMENT_CONFIRMED", "CONFIRMED", "CANCELLED"],
+      PAYMENT_CONFIRMED: ["CONFIRMED", "STORE_ACCEPTED", "CANCELLED", "REFUNDED"],
+      CONFIRMED: ["STORE_ACCEPTED", "PREPARING", "CANCELLED"],
+      STORE_ACCEPTED: ["PREPARING", "CANCELLED"],
       PREPARING: ["READY_FOR_PICKUP", "CANCELLED"],
       READY_FOR_PICKUP: ["PICKED_UP", "CANCELLED"],
       PICKED_UP: ["OUT_FOR_DELIVERY"],
@@ -1207,6 +1252,21 @@ var KidsGDatabase = class {
     }
     order.status = targetStatus;
     order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const defaultMessages = {
+      STORE_ACCEPTED: "Shop has accepted your order",
+      PREPARING: "Your stationery is being packed",
+      READY_FOR_PICKUP: "Your order is ready for pickup",
+      PICKED_UP: "Order picked up by delivery partner",
+      OUT_FOR_DELIVERY: "Your order is on the way",
+      DELIVERED: "Delivered successfully to your address",
+      CANCELLED: "Order has been cancelled"
+    };
+    this.addOrderStatusHistory(
+      orderId,
+      targetStatus,
+      message || defaultMessages[targetStatus] || `Order status updated to ${targetStatus}`,
+      createdBy
+    );
     return { success: true, order };
   }
   cancelOrder(orderId, userId) {
@@ -1217,27 +1277,148 @@ var KidsGDatabase = class {
     }
     order.status = "CANCELLED";
     order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    this.addOrderStatusHistory(orderId, "CANCELLED", "Order cancelled by customer", "CUSTOMER");
     return { success: true, order };
   }
-  // --- Profile Operations ---
-  getProfile(userId) {
-    return this.userProfiles.get(userId) || {
+  // --- Order Status History & Payments ---
+  addOrderStatusHistory(orderId, status, message, createdBy = "SYSTEM") {
+    const historyItem = {
+      id: `hist_${randomUUID().substring(0, 8)}`,
+      orderId,
+      status,
+      message,
+      createdBy,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const existing = this.orderStatusHistory.get(orderId) || [];
+    existing.push(historyItem);
+    this.orderStatusHistory.set(orderId, existing);
+    return historyItem;
+  }
+  getOrderStatusHistory(orderId) {
+    return this.orderStatusHistory.get(orderId) || [];
+  }
+  addPaymentRecord(record) {
+    const existing = this.payments.get(record.orderId) || [];
+    existing.push(record);
+    this.payments.set(record.orderId, existing);
+  }
+  getPaymentsForOrder(orderId) {
+    return this.payments.get(orderId) || [];
+  }
+  // --- Shop Owner Operations ---
+  getShopOrders(storeId, statusFilter) {
+    const targetStoreId = storeId || this.stores[0]?.id;
+    let list = Array.from(this.orders.values()).filter((o) => !targetStoreId || o.storeId === targetStoreId);
+    if (statusFilter && statusFilter !== "ALL") {
+      if (statusFilter === "NEW") {
+        list = list.filter((o) => o.status === "CONFIRMED");
+      } else if (statusFilter === "ACTIVE") {
+        list = list.filter((o) => ["STORE_ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(o.status));
+      } else if (statusFilter === "COMPLETED") {
+        list = list.filter((o) => o.status === "DELIVERED");
+      }
+    }
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  shopAcceptOrder(orderId, _storeId) {
+    return this.transitionOrderStatus(orderId, "STORE_ACCEPTED", "Shop has accepted your order", "SHOP_OWNER");
+  }
+  shopRejectOrder(orderId, _storeId, reason) {
+    return this.transitionOrderStatus(
+      orderId,
+      "CANCELLED",
+      reason ? `Order rejected by shop: ${reason}` : "Shop was unable to accept your order",
+      "SHOP_OWNER"
+    );
+  }
+  shopStartPacking(orderId, _storeId) {
+    return this.transitionOrderStatus(orderId, "PREPARING", "Your stationery is being packed", "SHOP_OWNER");
+  }
+  shopReadyForPickup(orderId, _storeId) {
+    return this.transitionOrderStatus(orderId, "READY_FOR_PICKUP", "Your order is ready for pickup", "SHOP_OWNER");
+  }
+  advanceDeliveryStatus(orderId, nextStatus) {
+    const res = this.transitionOrderStatus(orderId, nextStatus, void 0, "DELIVERY_PARTNER");
+    if (res.success && res.order) {
+      res.order.deliveryStatus = nextStatus;
+    }
+    return res;
+  }
+  // --- Strict Email-First Authentication & Profile Operations ---
+  checkEmailExists(email) {
+    const key = email.trim().toLowerCase();
+    const cred = this.userCredentials.get(key);
+    if (cred) {
+      const profile = this.userProfiles.get(cred.userId);
+      return { exists: true, firstName: profile?.firstName, user: profile };
+    }
+    for (const p of this.userProfiles.values()) {
+      if (p.email && p.email.trim().toLowerCase() === key) {
+        return { exists: true, firstName: p.firstName, user: p };
+      }
+    }
+    return { exists: false };
+  }
+  registerUser(params) {
+    const emailKey = params.email.trim().toLowerCase();
+    if (this.checkEmailExists(emailKey).exists) {
+      return { success: false, error: "An account with this email already exists" };
+    }
+    if (!params.password || params.password.length < 6) {
+      return { success: false, error: "Password must be at least 6 characters" };
+    }
+    const userId = `user_${randomUUID().substring(0, 10)}`;
+    const salt = randomBytes(16).toString("hex");
+    const passwordHash = this.hashPassword(params.password, salt);
+    this.userCredentials.set(emailKey, {
+      userId,
+      email: emailKey,
+      passwordHash,
+      salt
+    });
+    const profile = {
       id: userId,
       authUserId: userId,
-      firstName: "Student",
-      lastName: "User",
-      phone: "+919876543210",
-      email: "student@kidsg.in",
+      firstName: params.firstName.trim(),
+      lastName: (params.lastName || "").trim(),
+      phone: (params.phone || "").trim(),
+      email: emailKey,
+      avatarUrl: "",
       role: "CUSTOMER",
       onboardingCompleted: true,
-      selectedClass: "Class 7",
-      selectedSchool: "School",
+      selectedClass: params.selectedClass || "Class 7",
+      selectedSchool: params.selectedSchool || "KidsG Partner School",
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    this.userProfiles.set(userId, profile);
+    this.carts.set(userId, []);
+    this.addresses.set(userId, []);
+    return { success: true, user: profile };
+  }
+  authenticateWithPassword(email, password) {
+    const emailKey = email.trim().toLowerCase();
+    const cred = this.userCredentials.get(emailKey);
+    if (!cred) {
+      return { success: false, error: "Invalid email or password" };
+    }
+    const computedHash = this.hashPassword(password, cred.salt);
+    if (computedHash !== cred.passwordHash) {
+      return { success: false, error: "Invalid email or password" };
+    }
+    const profile = this.userProfiles.get(cred.userId);
+    return { success: true, user: profile };
+  }
+  getProfile(userId) {
+    return this.userProfiles.get(userId);
   }
   updateProfile(userId, updates) {
-    const existing = this.getProfile(userId);
+    const existing = this.getProfile(userId) || {
+      id: userId,
+      authUserId: userId,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
     const updated = { ...existing, ...updates, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.userProfiles.set(userId, updated);
     return updated;
@@ -1259,10 +1440,10 @@ var KidsGDatabase = class {
     return ticket;
   }
   getSupportTickets(userId) {
-    return this.tickets.filter((t) => t.userId === userId || t.userId === "user_dev_default");
+    return this.tickets.filter((t) => t.userId === userId);
   }
   getSupportTicketById(id, userId) {
-    return this.tickets.find((t) => (t.id === id || t.ticketNumber === id) && (t.userId === userId || t.userId === "user_dev_default"));
+    return this.tickets.find((t) => (t.id === id || t.ticketNumber === id) && t.userId === userId);
   }
 };
 var db = new KidsGDatabase();
@@ -1276,9 +1457,12 @@ function extractBearerToken(req) {
   return authHeader.substring(7).trim();
 }
 async function parseToken(token) {
-  if (token.startsWith("kidsg-jwt-")) {
-    const userId = token.replace("kidsg-jwt-", "");
+  if (token.startsWith("kidsg-jwt-") || token.startsWith("dev-token-")) {
+    const userId = token.replace("kidsg-jwt-", "").replace("dev-token-", "");
     const profile = db.getProfile(userId);
+    if (!profile) {
+      return null;
+    }
     return {
       id: userId,
       authUserId: userId,
@@ -1287,19 +1471,6 @@ async function parseToken(token) {
       role: profile?.role || "CUSTOMER",
       firstName: profile?.firstName || "Student",
       lastName: profile?.lastName || ""
-    };
-  }
-  if (token.startsWith("dev-token-") || token.startsWith("mock-token-") || token === "dev_token") {
-    const userId = token.replace("dev-token-", "").replace("mock-token-", "");
-    const isMockAdmin = token.includes("admin");
-    return {
-      id: userId || "user_dev_default",
-      authUserId: userId || "user_dev_default",
-      phone: "+919876543210",
-      email: isMockAdmin ? "admin@kidsg.in" : "student@kidsg.in",
-      role: isMockAdmin ? "ADMIN" : "CUSTOMER",
-      firstName: isMockAdmin ? "KidsG" : "Aarav",
-      lastName: isMockAdmin ? "Admin" : "Sharma"
     };
   }
   try {
@@ -1334,6 +1505,18 @@ function requireAuth() {
       return;
     }
     req.user = user;
+    next();
+  };
+}
+function optionalAuth() {
+  return async (req, _res, next) => {
+    const token = extractBearerToken(req);
+    if (token) {
+      const user = await parseToken(token);
+      if (user) {
+        req.user = user;
+      }
+    }
     next();
   };
 }
@@ -1410,8 +1593,7 @@ var MockOtpService = class _MockOtpService {
       _MockOtpService.otpStore.delete(key);
       return { success: false, message: "Too many invalid attempts. Please request a new code." };
     }
-    const isDevBypass = process.env.NODE_ENV !== "production" && inputOtp.trim() === "123456";
-    if (stored.otp !== inputOtp.trim() && !isDevBypass) {
+    if (stored.otp !== inputOtp.trim()) {
       return { success: false, message: "Invalid verification code" };
     }
     _MockOtpService.otpStore.delete(key);
@@ -1675,6 +1857,22 @@ function getEmailService() {
 // src/routes/auth.ts
 var router2 = Router2();
 var otpService = getOtpService();
+var checkEmailSchema = z2.object({
+  email: z2.string().email("Please enter a valid email address")
+});
+var loginPasswordSchema = z2.object({
+  email: z2.string().email("Please enter a valid email address"),
+  password: z2.string().min(1, "Password is required")
+});
+var signupSchema = z2.object({
+  firstName: z2.string().min(1, "First name is required"),
+  lastName: z2.string().optional().default(""),
+  email: z2.string().email("Valid email is required"),
+  phone: z2.string().optional().default(""),
+  password: z2.string().min(6, "Password must be at least 6 characters long"),
+  selectedClass: z2.string().optional().default("Class 7"),
+  selectedSchool: z2.string().optional().default("KidsG Partner School")
+});
 var sendOtpSchema = z2.object({
   email: z2.string().email().nullish().or(z2.literal("")),
   phone: z2.string().min(10).nullish().or(z2.literal(""))
@@ -1687,6 +1885,146 @@ var verifyOtpSchema = z2.object({
   otp: z2.string().min(4).max(8, "OTP must be valid")
 }).refine((data) => data.email && data.email.trim().length > 0 || data.phone && data.phone.trim().length > 0, {
   message: "Either email or phone number is required"
+});
+router2.post("/auth/check-email", rateLimit(30, 6e4, "auth_check_email"), async (req, res) => {
+  const result = checkEmailSchema.safeParse(req.body);
+  if (!result.success) {
+    sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const email = result.data.email.trim().toLowerCase();
+  const localCheck = db.checkEmailExists(email);
+  if (localCheck.exists) {
+    sendSuccess(res, {
+      exists: true,
+      firstName: localCheck.firstName || "Student"
+    }, "Account found");
+    return;
+  }
+  try {
+    const { data: supaProfile } = await supabaseAdmin.from("profiles").select("id, first_name, email").eq("email", email).single();
+    if (supaProfile?.id) {
+      sendSuccess(res, {
+        exists: true,
+        firstName: supaProfile.first_name || "Student"
+      }, "Account found");
+      return;
+    }
+  } catch {
+  }
+  sendSuccess(res, {
+    exists: false
+  }, "New email. Please complete sign up.");
+});
+router2.post("/auth/login-password", rateLimit(15, 6e4, "auth_login_password"), async (req, res) => {
+  const result = loginPasswordSchema.safeParse(req.body);
+  if (!result.success) {
+    sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const { email, password } = result.data;
+  const emailClean = email.trim().toLowerCase();
+  const authRes = db.authenticateWithPassword(emailClean, password);
+  if (authRes.success && authRes.user) {
+    const token = `kidsg-jwt-${authRes.user.id}`;
+    sendSuccess(res, {
+      token,
+      user: authRes.user,
+      profile: authRes.user
+    }, "Login successful");
+    return;
+  }
+  try {
+    const { data: supaAuth, error: supaErr } = await supabaseAuth.auth.signInWithPassword({
+      email: emailClean,
+      password
+    });
+    if (!supaErr && supaAuth.user) {
+      let profile = db.getProfile(supaAuth.user.id);
+      if (!profile) {
+        profile = {
+          id: supaAuth.user.id,
+          authUserId: supaAuth.user.id,
+          email: emailClean,
+          firstName: supaAuth.user.user_metadata?.first_name || "Student",
+          lastName: supaAuth.user.user_metadata?.last_name || "",
+          phone: supaAuth.user.phone || "",
+          role: supaAuth.user.user_metadata?.role || "CUSTOMER",
+          onboardingCompleted: true,
+          selectedClass: "Class 7",
+          selectedSchool: "KidsG Partner School",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        db.updateProfile(supaAuth.user.id, profile);
+      }
+      sendSuccess(res, {
+        token: supaAuth.session?.access_token || `kidsg-jwt-${supaAuth.user.id}`,
+        user: profile,
+        profile
+      }, "Login successful");
+      return;
+    }
+  } catch {
+  }
+  sendError(res, "Invalid email or password. Please verify your credentials.", "INVALID_CREDENTIALS", 401);
+});
+router2.post("/auth/signup", rateLimit(15, 6e4, "auth_signup"), async (req, res) => {
+  const result = signupSchema.safeParse(req.body);
+  if (!result.success) {
+    sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const { firstName, lastName, email, phone, password, selectedClass, selectedSchool } = result.data;
+  const emailClean = email.trim().toLowerCase();
+  const regRes = db.registerUser({
+    email: emailClean,
+    password,
+    firstName,
+    lastName,
+    phone,
+    selectedClass,
+    selectedSchool
+  });
+  if (!regRes.success || !regRes.user) {
+    sendError(res, regRes.error || "Failed to create account", "SIGNUP_FAILED", 400);
+    return;
+  }
+  const profile = regRes.user;
+  const token = `kidsg-jwt-${profile.id}`;
+  try {
+    const { data: supaUser } = await supabaseAdmin.auth.admin.createUser({
+      email: emailClean,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        first_name: firstName,
+        last_name: lastName,
+        role: "CUSTOMER"
+      }
+    });
+    if (supaUser?.user) {
+      await supabaseAdmin.from("profiles").insert({
+        id: profile.id,
+        auth_user_id: supaUser.user.id,
+        first_name: firstName,
+        last_name: lastName,
+        email: emailClean,
+        phone,
+        role: "CUSTOMER",
+        onboarding_completed: true,
+        selected_class: selectedClass,
+        selected_school: selectedSchool
+      });
+    }
+  } catch (err) {
+    console.warn("[KidsG][Supabase] User sync notice:", err?.message);
+  }
+  sendSuccess(res, {
+    token,
+    user: profile,
+    profile
+  }, "Account created successfully", 201);
 });
 router2.post("/auth/send-otp", rateLimit(20, 6e4, "auth_send_otp"), async (req, res) => {
   const result = sendOtpSchema.safeParse(req.body);
@@ -1720,7 +2058,7 @@ router2.post("/auth/send-otp", rateLimit(20, 6e4, "auth_send_otp"), async (req, 
       email,
       expiresInSeconds: 300,
       code: otp
-    }, `Verification code sent to ${email} (OTP Code: ${otp})`);
+    }, `Verification code sent to ${email}`);
     return;
   }
   const contact = phone || "";
@@ -1755,35 +2093,42 @@ router2.post("/auth/verify-otp", rateLimit(20, 6e4, "auth_verify_otp"), async (r
     sendError(res, verifyRes.message || "Invalid or expired verification code", "INVALID_OTP", 400);
     return;
   }
-  const userId = email ? `user_${email.replace(/[^a-zA-Z0-9]/g, "_")}` : `user_${phone?.replace(/[^a-zA-Z0-9]/g, "_")}`;
-  const profile = db.getProfile(userId);
-  const token = `kidsg-jwt-${userId}`;
+  const emailClean = (email || "").trim().toLowerCase();
+  const existing = emailClean ? db.checkEmailExists(emailClean) : null;
+  if (existing?.exists && existing.user) {
+    const token = `kidsg-jwt-${existing.user.id}`;
+    sendSuccess(res, {
+      verified: true,
+      isNewUser: false,
+      token,
+      user: existing.user,
+      profile: existing.user
+    }, "OTP verified successfully");
+    return;
+  }
   sendSuccess(res, {
     verified: true,
-    token,
-    user: {
-      id: userId,
-      phone: profile.phone || (phone ?? void 0),
-      email: profile.email || (email ?? void 0),
-      role: profile.role || "CUSTOMER",
-      firstName: profile.firstName || "Student",
-      lastName: profile.lastName || ""
-    },
-    profile
-  }, "OTP verified successfully");
+    isNewUser: true,
+    email: emailClean,
+    phone: phone || ""
+  }, "Verification code accepted. Please complete account details.");
 });
 router2.post("/auth/logout", requireAuth(), (_req, res) => {
   sendSuccess(res, { loggedOut: true }, "Successfully logged out");
 });
 router2.post("/auth/refresh", requireAuth(), (req, res) => {
   const user = req.user;
-  const newToken = `dev-token-${user.id}`;
+  const newToken = `kidsg-jwt-${user.id}`;
   sendSuccess(res, { token: newToken });
 });
 router2.get("/auth/me", requireAuth(), (req, res) => {
   const user = req.user;
   const profile = db.getProfile(user.id);
   const addresses = db.getAddresses(user.id);
+  if (!profile) {
+    sendError(res, "User profile not found", "PROFILE_NOT_FOUND", 404);
+    return;
+  }
   sendSuccess(res, {
     user: {
       id: user.id,
@@ -2162,6 +2507,14 @@ var store_default = router8;
 import { Router as Router9 } from "express";
 import { z as z6 } from "zod";
 var router9 = Router9();
+function getEffectiveUserId(req) {
+  if (req.user?.id) return req.user.id;
+  const guestHeader = req.headers["x-guest-id"] || req.headers["x-session-id"];
+  if (guestHeader && typeof guestHeader === "string" && guestHeader.trim().length > 0) {
+    return `guest_${guestHeader.trim()}`;
+  }
+  return "guest_default_user";
+}
 var addItemSchema = z6.object({
   productId: z6.string().min(1, "Product ID is required"),
   quantity: z6.number().int().positive("Quantity must be greater than zero").default(1),
@@ -2170,43 +2523,48 @@ var addItemSchema = z6.object({
 var updateItemSchema = z6.object({
   quantity: z6.number().int().min(0, "Quantity cannot be negative")
 });
-router9.get("/cart", requireAuth(), (req, res) => {
-  const cart = db.getCart(req.user.id);
+router9.get("/cart", optionalAuth(), (req, res) => {
+  const userId = getEffectiveUserId(req);
+  const cart = db.getCart(userId);
   sendSuccess(res, cart);
 });
-router9.post("/cart/items", requireAuth(), (req, res) => {
+router9.post("/cart/items", optionalAuth(), (req, res) => {
   const result = addItemSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
     return;
   }
+  const userId = getEffectiveUserId(req);
   const { productId, quantity, selectedVariant } = result.data;
-  const resCart = db.addToCart(req.user.id, productId, quantity, selectedVariant || void 0);
+  const resCart = db.addToCart(userId, productId, quantity, selectedVariant || void 0);
   if (!resCart.success) {
     sendError(res, resCart.error || "Could not add to bag", "CART_ERROR", 400);
     return;
   }
   sendSuccess(res, resCart.cart, "Item added to School Bag", 201);
 });
-router9.patch("/cart/items/:id", requireAuth(), (req, res) => {
+router9.patch("/cart/items/:id", optionalAuth(), (req, res) => {
   const result = updateItemSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
     return;
   }
-  const resCart = db.updateCartItem(req.user.id, String(req.params.id), result.data.quantity);
+  const userId = getEffectiveUserId(req);
+  const resCart = db.updateCartItem(userId, String(req.params.id), result.data.quantity);
   if (!resCart.success) {
     sendError(res, resCart.error || "Could not update item", "CART_ERROR", 400);
     return;
   }
   sendSuccess(res, resCart.cart, "School Bag updated");
 });
-router9.delete("/cart/items/:id", requireAuth(), (req, res) => {
-  const resCart = db.removeFromCart(req.user.id, String(req.params.id));
+router9.delete("/cart/items/:id", optionalAuth(), (req, res) => {
+  const userId = getEffectiveUserId(req);
+  const resCart = db.removeFromCart(userId, String(req.params.id));
   sendSuccess(res, resCart.cart, "Item removed from School Bag");
 });
-router9.delete("/cart", requireAuth(), (req, res) => {
-  db.clearCart(req.user.id);
+router9.delete("/cart", optionalAuth(), (req, res) => {
+  const userId = getEffectiveUserId(req);
+  db.clearCart(userId);
   sendSuccess(res, { cleared: true, items: [], subtotal: 0, totalItems: 0 }, "School Bag emptied");
 });
 var cart_default = router9;
@@ -2748,6 +3106,13 @@ router13.post("/orders", requireAuth(), async (req, res) => {
     `Your stationery order ${order.orderNumber} is confirmed and sent to the store.`,
     { orderId: order.id, orderNumber: order.orderNumber }
   );
+  await notificationService2.send(
+    "shop_owner_vidya",
+    "NEW_ORDER",
+    "New KidsG order received \u{1F392}",
+    `Order #${order.orderNumber} (${order.items.length} items, \u20B9${order.total}) requires your attention.`,
+    { orderId: order.id, orderNumber: order.orderNumber, storeId: order.storeId, total: order.total }
+  );
   sendSuccess(res, order, "Order placed successfully", 201);
 });
 router13.get("/orders", requireAuth(), (req, res) => {
@@ -2760,7 +3125,11 @@ router13.get("/orders/:id", requireAuth(), (req, res) => {
     sendError(res, "Order not found", "ORDER_NOT_FOUND", 404);
     return;
   }
-  sendSuccess(res, order);
+  const statusHistory = db.getOrderStatusHistory(order.id);
+  sendSuccess(res, {
+    ...order,
+    statusHistory
+  });
 });
 router13.post("/orders/:id/cancel", requireAuth(), async (req, res) => {
   const orderId = String(req.params.id);
@@ -2789,7 +3158,11 @@ router13.get("/orders/:id/tracking", requireAuth(), async (req, res) => {
     order.createdAt,
     order.status
   );
-  sendSuccess(res, tracking);
+  const persistedHistory = db.getOrderStatusHistory(order.id);
+  sendSuccess(res, {
+    ...tracking,
+    timeline: persistedHistory
+  });
 });
 var order_default = router13;
 
@@ -2839,6 +3212,132 @@ router14.get("/support/tickets/:id", requireAuth(), (req, res) => {
 });
 var notification_default = router14;
 
+// src/routes/shop.ts
+import { Router as Router15 } from "express";
+import { z as z12 } from "zod";
+var router15 = Router15();
+var notificationService4 = getNotificationService();
+router15.get("/shop/orders", (req, res) => {
+  const storeId = req.query.storeId;
+  const statusFilter = req.query.status;
+  const orders = db.getShopOrders(storeId, statusFilter);
+  sendSuccess(res, orders);
+});
+router15.get("/shop/orders/:id", (req, res) => {
+  const orderId = String(req.params.id);
+  const order = db.getOrderByIdAdmin(orderId);
+  if (!order) {
+    sendError(res, "Order not found", "ORDER_NOT_FOUND", 404);
+    return;
+  }
+  const history = db.getOrderStatusHistory(orderId);
+  sendSuccess(res, {
+    order,
+    statusHistory: history
+  });
+});
+router15.post("/shop/orders/:id/accept", async (req, res) => {
+  const orderId = String(req.params.id);
+  const result = db.shopAcceptOrder(orderId);
+  if (!result.success || !result.order) {
+    sendError(res, result.error || "Failed to accept order", "ACCEPT_FAILED", 400);
+    return;
+  }
+  await notificationService4.send(
+    result.order.userId,
+    "STORE_ACCEPTED",
+    "Order Accepted! \u{1F6CD}\uFE0F",
+    `Vidya Stationery Depot has accepted your order ${result.order.orderNumber}.`,
+    { orderId, orderNumber: result.order.orderNumber }
+  );
+  sendSuccess(res, result.order, "Order accepted by store");
+});
+router15.post("/shop/orders/:id/reject", async (req, res) => {
+  const orderId = String(req.params.id);
+  const reason = req.body.reason;
+  const result = db.shopRejectOrder(orderId, void 0, reason);
+  if (!result.success || !result.order) {
+    sendError(res, result.error || "Failed to reject order", "REJECT_FAILED", 400);
+    return;
+  }
+  await notificationService4.send(
+    result.order.userId,
+    "ORDER_CANCELLED",
+    "Order Update",
+    `Order ${result.order.orderNumber} could not be fulfilled by the store. Any amount paid will be refunded.`,
+    { orderId, orderNumber: result.order.orderNumber }
+  );
+  sendSuccess(res, result.order, "Order rejected");
+});
+router15.post("/shop/orders/:id/packing", async (req, res) => {
+  const orderId = String(req.params.id);
+  const result = db.shopStartPacking(orderId);
+  if (!result.success || !result.order) {
+    sendError(res, result.error || "Failed to update packing status", "UPDATE_FAILED", 400);
+    return;
+  }
+  await notificationService4.send(
+    result.order.userId,
+    "ORDER_PREPARING",
+    "Stationery Being Packed \u{1F4E6}",
+    `Your school supplies for order ${result.order.orderNumber} are being packed with care.`,
+    { orderId, orderNumber: result.order.orderNumber }
+  );
+  sendSuccess(res, result.order, "Order status changed to PREPARING");
+});
+router15.post("/shop/orders/:id/ready", async (req, res) => {
+  const orderId = String(req.params.id);
+  const result = db.shopReadyForPickup(orderId);
+  if (!result.success || !result.order) {
+    sendError(res, result.error || "Failed to update status", "UPDATE_FAILED", 400);
+    return;
+  }
+  await notificationService4.send(
+    result.order.userId,
+    "READY_FOR_PICKUP",
+    "Order Ready for Pickup \u{1F680}",
+    `Order ${result.order.orderNumber} is packed and ready. Delivery partner assigned.`,
+    { orderId, orderNumber: result.order.orderNumber }
+  );
+  sendSuccess(res, result.order, "Order status changed to READY_FOR_PICKUP");
+});
+var advanceDeliverySchema = z12.object({
+  status: z12.enum(["PICKED_UP", "OUT_FOR_DELIVERY", "DELIVERED"])
+});
+router15.post("/delivery/orders/:id/advance", async (req, res) => {
+  const parseResult = advanceDeliverySchema.safeParse(req.body);
+  if (!parseResult.success) {
+    sendError(res, "Valid status required: PICKED_UP, OUT_FOR_DELIVERY, or DELIVERED", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const orderId = String(req.params.id);
+  const targetStatus = parseResult.data.status;
+  const result = db.advanceDeliveryStatus(orderId, targetStatus);
+  if (!result.success || !result.order) {
+    sendError(res, result.error || "Failed to advance delivery", "DELIVERY_UPDATE_FAILED", 400);
+    return;
+  }
+  const titles = {
+    PICKED_UP: "Stationery Picked Up \u{1F6F5}",
+    OUT_FOR_DELIVERY: "Out for Delivery \u{1F680}",
+    DELIVERED: "Delivered Successfully! \u{1F389}"
+  };
+  const messages = {
+    PICKED_UP: `Delivery partner Venkatesh has picked up your stationery bag for order ${result.order.orderNumber}.`,
+    OUT_FOR_DELIVERY: `Rider is on the way with your books and stationery for order ${result.order.orderNumber}.`,
+    DELIVERED: `Order ${result.order.orderNumber} has been delivered. Have a bright school day!`
+  };
+  await notificationService4.send(
+    result.order.userId,
+    targetStatus,
+    titles[targetStatus] || "Delivery Update",
+    messages[targetStatus] || `Status: ${targetStatus}`,
+    { orderId, orderNumber: result.order.orderNumber, status: targetStatus }
+  );
+  sendSuccess(res, result.order, `Delivery status advanced to ${targetStatus}`);
+});
+var shop_default = router15;
+
 // src/server.ts
 var app = express();
 app.use(cors({
@@ -2879,6 +3378,7 @@ app.use("/api", checkout_default);
 app.use("/api", payment_default);
 app.use("/api", order_default);
 app.use("/api", notification_default);
+app.use("/api", shop_default);
 app.get("/", (_req, res) => {
   res.json({
     app: "KidsG API Server",

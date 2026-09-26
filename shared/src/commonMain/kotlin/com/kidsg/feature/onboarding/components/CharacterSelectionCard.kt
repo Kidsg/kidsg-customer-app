@@ -105,7 +105,7 @@ fun CharacterSelectionCard(
             .alpha(alphaVal)
             .scale(scale)
             .shadow(
-                elevation = if (isSelected) 8.dp else 2.dp,
+                elevation = if (isSelected) 4.dp else 0.dp,
                 shape = RoundedCornerShape(20.dp),
                 clip = false
             )

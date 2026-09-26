@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -122,6 +123,20 @@ fun KidsGBottomBar(
                                 fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
                             )
                         )
+
+                        Spacer(modifier = Modifier.height(3.dp))
+
+                        if (isSelected) {
+                            Box(
+                                modifier = Modifier
+                                    .width(26.dp)
+                                    .height(3.dp)
+                                    .clip(KidsGShapes.FullPill)
+                                    .background(KidsGColors.OrangePrimary)
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.height(3.dp))
+                        }
                     }
                 }
             }

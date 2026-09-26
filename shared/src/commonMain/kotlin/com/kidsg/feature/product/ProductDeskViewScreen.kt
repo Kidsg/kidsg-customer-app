@@ -22,15 +22,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kidsg.core.designsystem.KidsGAsyncImage
 import com.kidsg.core.designsystem.KidsGColors
 import com.kidsg.core.designsystem.KidsGIcons
 import com.kidsg.core.designsystem.KidsGIllustration
@@ -58,6 +62,7 @@ fun ProductDeskViewScreen(
 ) {
     var selectedVariant by remember { mutableStateOf(product.variants.firstOrNull() ?: "Standard") }
     var isWishlisted by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
     val cart by cartRepository.cartState.collectAsState()
     val itemInCart = cart.items.find { it.product.id == product.id }
     val cartQuantity = itemInCart?.quantity ?: 0
@@ -135,7 +140,21 @@ fun ProductDeskViewScreen(
                         )
 
                         // Central stationery visual
-                        KidsGProductVisual(product = product, modifier = Modifier.size(130.dp))
+                        if (!product.imageUrl.isNullOrBlank()) {
+                            KidsGAsyncImage(
+                                url = product.imageUrl,
+                                contentDescription = product.name,
+                                modifier = Modifier
+                                    .size(200.dp)
+                                    .padding(8.dp),
+                                contentScale = ContentScale.Fit,
+                                placeholder = {
+                                    KidsGProductVisual(product = product, modifier = Modifier.size(140.dp))
+                                }
+                            )
+                        } else {
+                            KidsGProductVisual(product = product, modifier = Modifier.size(140.dp))
+                        }
 
                         // Express Badge
                         Box(
@@ -341,7 +360,7 @@ fun ProductDeskViewScreen(
                 KidsGSecondaryButton(
                     text = if (cartQuantity > 0) "In Bag ($cartQuantity)" else "Add to Bag",
                     onClick = {
-                        kotlinx.coroutines.runBlocking {
+                        coroutineScope.launch {
                             cartRepository.addToCart(product, 1, selectedVariant)
                         }
                     },
@@ -352,10 +371,10 @@ fun ProductDeskViewScreen(
                 KidsGPrimaryButton(
                     text = "Buy Now",
                     onClick = {
-                        kotlinx.coroutines.runBlocking {
+                        coroutineScope.launch {
                             cartRepository.addToCart(product, 1, selectedVariant)
+                            onGoToBag()
                         }
-                        onGoToBag()
                     },
                     modifier = Modifier.weight(1f)
                 )

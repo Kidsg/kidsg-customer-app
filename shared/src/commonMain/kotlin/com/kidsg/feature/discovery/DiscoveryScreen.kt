@@ -15,13 +15,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import com.kidsg.data.mock.KidsGMockData
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,30 +32,46 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kidsg.core.designsystem.KidsGCategoryCard
 import com.kidsg.core.designsystem.KidsGColors
-import com.kidsg.core.designsystem.KidsGIcons
-import com.kidsg.core.designsystem.KidsGIllustration
 import com.kidsg.core.designsystem.KidsGProductCard
-import com.kidsg.core.designsystem.KidsGSearchBar
+import com.kidsg.core.designsystem.KidsGResourceImage
 import com.kidsg.core.designsystem.KidsGShapes
 import com.kidsg.core.designsystem.KidsGSpacing
 import com.kidsg.core.designsystem.KidsGTypography
-import com.kidsg.domain.model.Category
-import com.kidsg.domain.model.IntentModeInfo
+import com.kidsg.data.mock.KidsGMockData
 import com.kidsg.domain.model.IntentModeType
 import com.kidsg.domain.model.OopsEmergencyItem
 import com.kidsg.domain.model.Product
 import com.kidsg.domain.repository.CartRepository
 import com.kidsg.domain.repository.ProductRepository
 
+data class DiscoveryCategoryCard(
+    val id: String,
+    val resName: String,
+    val title: String,
+    val itemCount: String
+)
+
+data class DiscoveryFilterTab(
+    val id: String?,
+    val label: String
+)
+
 /**
- * Hero Experience 3: Discovery & Intent Modes (The Stationery Wall & Oops Flow)
- * (Sections 12, 13, 14)
+ * Stationery Discovery & Categories Screen
+ * Pixel-perfect adaptation of the user's designed categories page with:
+ * - Top Hero Banner ("Stationery Discovery" + artwork + back button)
+ * - Rounded Search Bar with scanner icon
+ * - Horizontal Filter Pills ("All", "Notebooks", "Pens & Pencils", "Art & Craft", "Bags", etc.)
+ * - "Categories" section with "Find what you love ♡"
+ * - 2-Column 8-Card Category Grid with exact illustration cards
+ * - Filtered supplies list with product cards & add-to-bag controls
  */
 @Composable
 fun DiscoveryScreen(
@@ -73,10 +91,34 @@ fun DiscoveryScreen(
     var searchQuery by remember { mutableStateOf("") }
     val cart by cartRepository.cartState.collectAsState()
 
-    val categories = remember { KidsGMockData.categories }
-    val intentModes = remember { KidsGMockData.intentModes }
     val oopsItems = remember { KidsGMockData.oopsItems }
     val allProducts = remember { KidsGMockData.products }
+
+    val filterTabs = remember {
+        listOf(
+            DiscoveryFilterTab(null, "All"),
+            DiscoveryFilterTab("notebooks", "Notebooks"),
+            DiscoveryFilterTab("pens_pencils", "Pens & Pencils"),
+            DiscoveryFilterTab("art_craft", "Art & Craft"),
+            DiscoveryFilterTab("school_bags", "Bags"),
+            DiscoveryFilterTab("geometry", "Geometry"),
+            DiscoveryFilterTab("lunch_boxes", "Bottles & Lunch"),
+            DiscoveryFilterTab("stationery_sets", "Sets")
+        )
+    }
+
+    val visualCategoryCards = remember {
+        listOf(
+            DiscoveryCategoryCard("notebooks", "cat_card_notebooks", "Notebooks", "42+ items"),
+            DiscoveryCategoryCard("pens_pencils", "cat_card_pens", "Pens & Pencils", "58+ items"),
+            DiscoveryCategoryCard("art_craft", "cat_card_art", "Art & Craft", "35+ items"),
+            DiscoveryCategoryCard("school_bags", "cat_card_bags", "School Bags", "28+ items"),
+            DiscoveryCategoryCard("geometry", "cat_card_geometry", "Geometry", "19+ items"),
+            DiscoveryCategoryCard("lunch_boxes", "cat_card_bottles", "Water Bottles", "24+ items"),
+            DiscoveryCategoryCard("lunch_boxes", "cat_card_lunch", "Lunch Boxes", "18+ items"),
+            DiscoveryCategoryCard("stationery_sets", "cat_card_sets", "Stationery Sets", "31+ items")
+        )
+    }
 
     val displayedProducts = remember(selectedMode, selectedCategoryId, searchQuery) {
         allProducts.filter { product ->
@@ -90,86 +132,164 @@ fun DiscoveryScreen(
         }
     }
 
-    KidsGIllustration.DeskBackground(modifier = modifier) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+    val listState = rememberLazyListState()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFFFCFDFE))
+    ) {
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = KidsGSpacing.lg, vertical = KidsGSpacing.md),
-            horizontalArrangement = Arrangement.spacedBy(KidsGSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(KidsGSpacing.md)
+            contentPadding = PaddingValues(bottom = 100.dp)
         ) {
-            // 1. Search Bar & Title
-            item(span = { GridItemSpan(2) }) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+            // 1. TOP HEADER BANNER (Artwork + "Stationery Discovery" + embedded back button)
+            item(key = "header_banner", contentType = "header") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(Color(0xFFFFFBF5))
+                ) {
+                    KidsGResourceImage(
+                        resName = "cat_header_banner",
+                        contentDescription = "Stationery Discovery",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.FillWidth
+                    )
+
+                    // Clickable Back Button over top-left back arrow
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 14.dp, top = 14.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.85f))
+                            .shadow(2.dp, CircleShape)
+                            .clickable(onClick = onBackToHome),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(KidsGShapes.FullPill)
-                                .background(KidsGColors.White)
-                                .border(1.dp, KidsGColors.BorderSubtle, KidsGShapes.FullPill)
-                                .clickable(onClick = onBackToHome),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = "←", style = KidsGTypography.TitleSmall)
-                        }
-
-                        Spacer(modifier = Modifier.width(KidsGSpacing.md))
-
                         Text(
-                            text = if (selectedCategoryId != null) {
-                                categories.find { it.id == selectedCategoryId }?.name ?: "Stationery Discovery"
-                            } else {
-                                "Stationery Discovery"
-                            },
-                            style = KidsGTypography.TitleLarge
+                            text = "←",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(KidsGSpacing.md))
-
-                    KidsGSearchBar(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        placeholder = "Search pens, notebooks, geometry..."
-                    )
                 }
             }
 
-            // 2. Horizontal Category Filter Chips (Matching Reference Screen 11)
-            item(span = { GridItemSpan(2) }) {
-                androidx.compose.foundation.lazy.LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(KidsGSpacing.sm)
+            // 2. SEARCH BAR WITH SCANNER ICON (Matching Design)
+            item(key = "search_bar", contentType = "search") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .shadow(4.dp, RoundedCornerShape(26.dp), spotColor = Color(0x18000000))
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(26.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    item {
-                        ModeFilterChip(
-                            title = "All",
-                            isSelected = selectedCategoryId == null,
-                            onClick = { selectedCategoryId = null }
-                        )
-                    }
-
-                    categories.forEach { cat ->
-                        item {
-                            ModeFilterChip(
-                                title = cat.name,
-                                isSelected = selectedCategoryId == cat.id,
-                                onClick = {
-                                    selectedCategoryId = if (selectedCategoryId == cat.id) null else cat.id
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(text = "🔍", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                textStyle = KidsGTypography.BodyMedium.copy(
+                                    color = Color(0xFF0F172A),
+                                    fontSize = 14.sp
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                decorationBox = { innerTextField ->
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            text = "Search pens, notebooks, geometry...",
+                                            style = KidsGTypography.BodyMedium.copy(
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 13.sp
+                                            )
+                                        )
+                                    }
+                                    innerTextField()
                                 }
                             )
                         }
+
+                        // Barcode / Scanner Icon on the right
+                        Text(
+                            text = "⛶",
+                            fontSize = 20.sp,
+                            color = Color(0xFFEA580C),
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
 
-            // 3. If "Oops Mode" is active, show the OOPS Emergency Drawer!
+            // 3. HORIZONTAL FILTER PILLS ("All", "Notebooks", "Pens & Pencils", ...)
+            item(key = "filter_chips", contentType = "filter") {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filterTabs, key = { it.id ?: "all" }) { tab ->
+                        val isSelected = selectedCategoryId == tab.id
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isSelected) Color(0xFFFF6D00) else Color.White)
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Color(0xFFFF6D00) else Color(0xFFE2E8F0),
+                                    RoundedCornerShape(20.dp)
+                                )
+                                .clickable { selectedCategoryId = tab.id }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = tab.label,
+                                color = if (isSelected) Color.White else Color(0xFF334155),
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+
+                    // Dropdown circle arrow button
+                    item(key = "dropdown_filter") {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                                .clickable { selectedCategoryId = null },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "▾", fontSize = 12.sp, color = Color(0xFF64748B))
+                        }
+                    }
+                }
+            }
+
+            // 4. OOPS EMERGENCY DRAWER (if in Oops Mode)
             if (selectedMode == IntentModeType.OOPS) {
-                item(span = { GridItemSpan(2) }) {
+                item(key = "oops_drawer", contentType = "oops") {
                     OopsEmergencyDrawer(
                         items = oopsItems,
                         onItemClick = { item -> searchQuery = item.targetQuery }
@@ -177,97 +297,144 @@ fun DiscoveryScreen(
                 }
             }
 
-            // 4. Stationery Wall (Categories 2-column grid when browsing all and no search)
-            if (selectedMode == null && selectedCategoryId == null && searchQuery.isEmpty()) {
-                item(span = { GridItemSpan(2) }) {
+            // 5. CATEGORIES SECTION HEADER ("Categories" + "Find what you love ♡")
+            item(key = "categories_header", contentType = "section_header") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = "Categories",
-                        style = KidsGTypography.TitleMedium.copy(fontSize = 18.sp)
-                    )
-                }
-
-                items(categories) { cat ->
-                    KidsGCategoryCard(
-                        category = cat,
-                        onClick = { category -> selectedCategoryId = category.id }
-                    )
-                }
-
-                item(span = { GridItemSpan(2) }) {
-                    Spacer(modifier = Modifier.height(KidsGSpacing.lg))
-                    Text(
-                        text = "Curated For Your Desk",
-                        style = KidsGTypography.TitleMedium.copy(fontSize = 18.sp)
-                    )
-                }
-            }
-
-            // Category active banner if selected
-            if (selectedCategoryId != null) {
-                item(span = { GridItemSpan(2) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${displayedProducts.size} supplies found",
-                            style = KidsGTypography.BodySmall.copy(color = KidsGColors.TextSecondary)
+                        style = KidsGTypography.DisplaySmall.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 22.sp,
+                            color = Color(0xFF0F172A)
                         )
+                    )
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Clear filter ✕",
-                            style = KidsGTypography.Caption.copy(color = KidsGColors.OrangePrimary, fontWeight = FontWeight.Bold),
-                            modifier = Modifier.clickable { selectedCategoryId = null }
+                            text = "Find what you love  ♡",
+                            style = KidsGTypography.Caption.copy(
+                                color = Color(0xFFEA580C),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
                         )
                     }
                 }
             }
 
-            // 5. Products Grid
-            items(displayedProducts) { product ->
-                val itemInCart = cart.items.find { it.product.id == product.id }
-                val quantity = itemInCart?.quantity ?: 0
-
-                KidsGProductCard(
-                    product = product,
-                    cartQuantity = quantity,
-                    onProductClick = onProductClick,
-                    onAddToCart = onAddToCart,
-                    onIncreaseQuantity = onIncreaseQuantity,
-                    onDecreaseQuantity = onDecreaseQuantity
-                )
+            // 6. 2-COLUMN GRID OF THE 8 CATEGORY CARDS
+            val chunkedCards = visualCategoryCards.chunked(2)
+            chunkedCards.forEachIndexed { index, rowCards ->
+                item(key = "category_row_$index", contentType = "cat_row") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        for (card in rowCards) {
+                            val isSelected = selectedCategoryId == card.id
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(118.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .shadow(4.dp, RoundedCornerShape(20.dp), spotColor = Color(0x18000000))
+                                    .border(
+                                        width = if (isSelected) 2.dp else 0.dp,
+                                        color = if (isSelected) Color(0xFFFF6D00) else Color.Transparent,
+                                        shape = RoundedCornerShape(20.dp)
+                                    )
+                                    .clickable {
+                                        selectedCategoryId = if (selectedCategoryId == card.id) null else card.id
+                                    }
+                            ) {
+                                KidsGResourceImage(
+                                    resName = card.resName,
+                                    contentDescription = card.title,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.FillBounds
+                                )
+                            }
+                        }
+                        if (rowCards.size < 2) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
             }
 
-            // Bottom Spacing for navigation bar
-            item(span = { GridItemSpan(2) }) {
-                Spacer(modifier = Modifier.height(80.dp))
+            // 7. ACTIVE FILTER / PRODUCTS SECTION
+            if (selectedCategoryId != null || searchQuery.isNotBlank()) {
+                item(key = "products_header", contentType = "prod_header") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${displayedProducts.size} supplies found",
+                            style = KidsGTypography.BodySmall.copy(
+                                color = Color(0xFF64748B),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+                        Text(
+                            text = "Clear filter ✕",
+                            style = KidsGTypography.Caption.copy(
+                                color = Color(0xFFEA580C),
+                                fontWeight = FontWeight.Bold
+                            ),
+                            modifier = Modifier.clickable {
+                                selectedCategoryId = null
+                                searchQuery = ""
+                            }
+                        )
+                    }
+                }
+            }
+
+            // 8. PRODUCT CARDS (in 2-column rows for matching products)
+            val chunkedProducts = displayedProducts.chunked(2)
+            chunkedProducts.forEachIndexed { prodRowIndex, prodRow ->
+                item(key = "prod_row_$prodRowIndex", contentType = "product_row") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        for (product in prodRow) {
+                            val itemInCart = cart.items.find { it.product.id == product.id }
+                            val quantity = itemInCart?.quantity ?: 0
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                KidsGProductCard(
+                                    product = product,
+                                    cartQuantity = quantity,
+                                    onProductClick = onProductClick,
+                                    onAddToCart = onAddToCart,
+                                    onIncreaseQuantity = onIncreaseQuantity,
+                                    onDecreaseQuantity = onDecreaseQuantity
+                                )
+                            }
+                        }
+                        if (prodRow.size < 2) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
             }
         }
-    }
-}
-
-@Composable
-fun ModeFilterChip(
-    title: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(KidsGShapes.FullPill)
-            .background(if (isSelected) KidsGColors.OrangePrimary else KidsGColors.White)
-            .border(1.dp, if (isSelected) KidsGColors.OrangePrimary else KidsGColors.BorderSubtle, KidsGShapes.FullPill)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = title,
-            style = KidsGTypography.Caption.copy(
-                color = if (isSelected) KidsGColors.White else KidsGColors.TextPrimary,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-            )
-        )
     }
 }
 
@@ -279,6 +446,7 @@ fun OopsEmergencyDrawer(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(KidsGShapes.Medium)
             .background(KidsGColors.AccentPinkLight)
             .border(1.5.dp, KidsGColors.AccentPink, KidsGShapes.Medium)

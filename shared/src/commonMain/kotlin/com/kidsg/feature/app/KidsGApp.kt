@@ -234,6 +234,10 @@ fun KidsGApp(
                                 coroutineScope.launch {
                                     cartRepository.updateQuantity(product.id, qty)
                                 }
+                            },
+                            onNavigateToBag = {
+                                currentTab = KidsGNavTab.BAG
+                                currentScreen = Screen.Bag
                             }
                         )
                     }
@@ -361,6 +365,8 @@ fun KidsGApp(
                     is Screen.Orders -> {
                         OrdersListScreen(
                             orders = activeOrders,
+                            orderRepository = orderRepository,
+                            cartRepository = cartRepository,
                             onBack = {
                                 currentTab = KidsGNavTab.HOME
                                 currentScreen = Screen.Home
@@ -369,6 +375,10 @@ fun KidsGApp(
                                 navigateTo(Screen.OrderTracking(orderId))
                             },
                             onExploreDesk = {
+                                currentTab = KidsGNavTab.HOME
+                                currentScreen = Screen.Home
+                            },
+                            onStartShopping = {
                                 currentTab = KidsGNavTab.HOME
                                 currentScreen = Screen.Home
                             }
@@ -389,6 +399,11 @@ fun KidsGApp(
                                     authRepository.logout()
                                 }
                                 currentScreen = Screen.Onboarding
+                            },
+                            onUpdateProfile = { updated ->
+                                coroutineScope.launch {
+                                    authRepository.updateProfile(updated)
+                                }
                             }
                         )
                     }
@@ -397,7 +412,8 @@ fun KidsGApp(
                         HelpSupportScreen(
                             onBack = { navigateBack() },
                             onTrackOrder = {
-                                navigateTo(Screen.OrderTracking("KG12345678"))
+                                val targetOrder = activeOrders.firstOrNull()?.displayOrderId ?: "KG-ORDER"
+                                navigateTo(Screen.OrderTracking(targetOrder))
                             }
                         )
                     }
@@ -413,9 +429,29 @@ fun KidsGApp(
                             onNavigateToCategory = { catId -> currentScreen = Screen.Discovery(null, catId) },
                             onNavigateToSearch = { currentScreen = Screen.Discovery(null, null) },
                             onProductClick = { product -> currentScreen = Screen.ProductDetail(product) },
-                            onAddToCart = {},
-                            onIncreaseQuantity = {},
-                            onDecreaseQuantity = {}
+                            onAddToCart = { product ->
+                                coroutineScope.launch {
+                                    cartRepository.addToCart(product, 1)
+                                }
+                            },
+                            onIncreaseQuantity = { product ->
+                                val item = cart.items.find { it.product.id == product.id }
+                                val qty = (item?.quantity ?: 0) + 1
+                                coroutineScope.launch {
+                                    cartRepository.updateQuantity(product.id, qty)
+                                }
+                            },
+                            onDecreaseQuantity = { product ->
+                                val item = cart.items.find { it.product.id == product.id }
+                                val qty = (item?.quantity ?: 0) - 1
+                                coroutineScope.launch {
+                                    cartRepository.updateQuantity(product.id, qty)
+                                }
+                            },
+                            onNavigateToBag = {
+                                currentTab = KidsGNavTab.BAG
+                                currentScreen = Screen.Bag
+                            }
                         )
                     }
                 }
