@@ -43,7 +43,9 @@ class ProductionOrderRepository(
             OrderItemRequestDto(
                 productId = it.product.id,
                 quantity = it.quantity,
-                selectedVariant = it.selectedVariant
+                selectedVariant = it.selectedVariant,
+                price = it.product.price,
+                name = it.product.name
             )
         }
         val addrDto = AddressDto(

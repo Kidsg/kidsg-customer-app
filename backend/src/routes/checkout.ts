@@ -19,6 +19,8 @@ const checkoutCreateSchema = z.object({
     productId: z.string(),
     quantity: z.number().default(1),
     selectedVariant: z.string().nullish(),
+    price: z.number().optional(),
+    name: z.string().optional(),
   })).optional(),
   deliveryAddress: z.any().optional(),
 });

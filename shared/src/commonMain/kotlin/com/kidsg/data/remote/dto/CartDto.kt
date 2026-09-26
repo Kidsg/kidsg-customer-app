@@ -90,7 +90,9 @@ data class CheckoutPreviewRequestDto(
 data class OrderItemRequestDto(
     val productId: String,
     val quantity: Int = 1,
-    val selectedVariant: String? = null
+    val selectedVariant: String? = null,
+    val price: Double? = null,
+    val name: String? = null
 )
 
 @Serializable
