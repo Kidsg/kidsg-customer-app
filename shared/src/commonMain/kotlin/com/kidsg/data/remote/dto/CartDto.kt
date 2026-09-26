@@ -87,9 +87,18 @@ data class CheckoutPreviewRequestDto(
 )
 
 @Serializable
+data class OrderItemRequestDto(
+    val productId: String,
+    val quantity: Int = 1,
+    val selectedVariant: String? = null
+)
+
+@Serializable
 data class CheckoutCreateRequestDto(
-    val addressId: String,
+    val addressId: String = "addr_default",
     val paymentMethod: String = "UPI",
-    val couponCode: String? = null
+    val couponCode: String? = null,
+    val items: List<OrderItemRequestDto> = emptyList(),
+    val deliveryAddress: AddressDto? = null
 )
 

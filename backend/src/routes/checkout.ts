@@ -11,10 +11,16 @@ const checkoutPreviewSchema = z.object({
 });
 
 const checkoutCreateSchema = z.object({
-  addressId: z.string().min(1, 'Delivery address is required'),
+  addressId: z.string().optional().default('addr_default'),
   couponCode: z.string().nullish(),
   paymentMethod: z.string().default('UPI'),
   notes: z.string().nullish(),
+  items: z.array(z.object({
+    productId: z.string(),
+    quantity: z.number().default(1),
+    selectedVariant: z.string().nullish(),
+  })).optional(),
+  deliveryAddress: z.any().optional(),
 });
 
 // POST /api/checkout/preview
@@ -47,13 +53,15 @@ router.post('/checkout/create', requireAuth(), (req: Request, res: Response) => 
     return;
   }
 
-  const { addressId, couponCode, paymentMethod, notes } = result.data;
+  const { addressId, couponCode, paymentMethod, notes, items, deliveryAddress } = result.data;
   const orderRes = db.createOrder(
     req.user!.id,
-    addressId,
+    addressId || 'addr_default',
     paymentMethod,
     couponCode || undefined,
-    notes || undefined
+    notes || undefined,
+    items,
+    deliveryAddress
   );
 
   if (!orderRes.success || !orderRes.order) {

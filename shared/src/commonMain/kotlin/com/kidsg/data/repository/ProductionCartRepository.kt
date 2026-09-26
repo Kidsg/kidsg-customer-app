@@ -35,59 +35,40 @@ class ProductionCartRepository(
     override val cartState: StateFlow<Cart> = _cartState.asStateFlow()
 
     suspend fun refreshCart() {
-        if (ApiConfig.authToken.isNullOrBlank()) {
-            // Guest or unauthenticated mode: preserve and sync with local storage
-            val saved = SessionStorage.getSavedCartItems()
-            if (saved.isNotEmpty() && _cartState.value.items.isEmpty()) {
-                _cartState.update { it.copy(items = saved) }
+        val localItems = _cartState.value.items.ifEmpty { SessionStorage.getSavedCartItems() }
+        if (localItems.isNotEmpty()) {
+            _cartState.update { it.copy(items = localItems) }
+            SessionStorage.saveCartItems(localItems)
+            // Push items to server in background
+            if (!ApiConfig.authToken.isNullOrBlank()) {
+                for (item in localItems) {
+                    try {
+                        cartApi.addToCart(item.product.id, item.quantity, item.selectedVariant)
+                    } catch (_: Exception) {
+                    }
+                }
             }
             return
         }
 
-        when (val res = cartApi.getCart()) {
-            is ApiResult.Success -> {
-                val serverItems = res.data.items.map { it.toDomain() }
-                _cartState.update { current ->
+        // Only if local was truly empty, attempt to fetch from server
+        if (!ApiConfig.authToken.isNullOrBlank()) {
+            when (val res = cartApi.getCart()) {
+                is ApiResult.Success -> {
+                    val serverItems = res.data.items.map { it.toDomain() }
                     if (serverItems.isNotEmpty()) {
                         SessionStorage.saveCartItems(serverItems)
-                        current.copy(items = serverItems)
-                    } else if (current.items.isNotEmpty()) {
-                        // Preserve active local cart items rather than wiping them out
-                        SessionStorage.saveCartItems(current.items)
-                        current
-                    } else {
-                        val saved = SessionStorage.getSavedCartItems()
-                        if (saved.isNotEmpty()) {
-                            current.copy(items = saved)
-                        } else {
-                            SessionStorage.saveCartItems(emptyList())
-                            current.copy(items = emptyList())
-                        }
+                        _cartState.update { it.copy(items = serverItems) }
                     }
                 }
-                // Push local items to server if server was empty
-                val currentItems = _cartState.value.items
-                if (serverItems.isEmpty() && currentItems.isNotEmpty()) {
-                    for (item in currentItems) {
-                        try {
-                            cartApi.addToCart(item.product.id, item.quantity, item.selectedVariant)
-                        } catch (_: Exception) {
-                        }
-                    }
-                }
-            }
-            is ApiResult.Error -> {
-                // Keep current state and fallback to saved cart on network error
-                val saved = SessionStorage.getSavedCartItems()
-                if (saved.isNotEmpty() && _cartState.value.items.isEmpty()) {
-                    _cartState.update { it.copy(items = saved) }
+                is ApiResult.Error -> {
                 }
             }
         }
     }
 
     override suspend fun addToCart(product: Product, quantity: Int, variant: String?) {
-        // Optimistic local update & persistent storage
+        // Optimistic local update & persistent storage (authoritative for client)
         _cartState.update { current ->
             val existing = current.items.find { it.product.id == product.id && it.selectedVariant == variant }
             val newItems = if (existing != null) {
@@ -103,19 +84,11 @@ class ProductionCartRepository(
             current.copy(items = newItems)
         }
 
-        // Authoritative server call if authenticated
+        // Sync with backend without replacing local multi-item cart with partial server responses
         if (!ApiConfig.authToken.isNullOrBlank()) {
-            when (val res = cartApi.addToCart(product.id, quantity, variant)) {
-                is ApiResult.Success -> {
-                    val domainItems = res.data.items.map { it.toDomain() }
-                    if (domainItems.isNotEmpty()) {
-                        SessionStorage.saveCartItems(domainItems)
-                        _cartState.update { it.copy(items = domainItems) }
-                    }
-                }
-                is ApiResult.Error -> {
-                    // Fallback kept optimistically
-                }
+            try {
+                cartApi.addToCart(product.id, quantity, variant)
+            } catch (_: Exception) {
             }
         }
     }

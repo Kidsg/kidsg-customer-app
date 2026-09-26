@@ -1,5 +1,6 @@
 package com.kidsg.core.storage
 
+import com.kidsg.domain.model.Address
 import com.kidsg.domain.model.CartItem
 import com.kidsg.domain.model.UserProfile
 import kotlinx.serialization.json.Json
@@ -143,6 +144,29 @@ object SessionStorage {
             val raw = json.encodeToString(CartWrapper.serializer(), CartWrapper(items))
             platformPutString(KEY_SAVED_CART, raw)
         } catch (_: Exception) {
+        }
+    }
+
+    private const val KEY_SELECTED_ADDRESS = "kidsg_selected_address"
+
+    fun getSelectedAddress(): Address? {
+        val raw = platformGetString(KEY_SELECTED_ADDRESS) ?: return null
+        return try {
+            json.decodeFromString<Address>(raw)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun saveSelectedAddress(address: Address?) {
+        if (address == null) {
+            platformRemove(KEY_SELECTED_ADDRESS)
+        } else {
+            try {
+                val raw = json.encodeToString(Address.serializer(), address)
+                platformPutString(KEY_SELECTED_ADDRESS, raw)
+            } catch (_: Exception) {
+            }
         }
     }
 

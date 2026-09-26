@@ -3,6 +3,8 @@ package com.kidsg.data.repository
 import com.kidsg.core.network.ApiResult
 import com.kidsg.data.remote.api.CheckoutApi
 import com.kidsg.data.remote.api.OrderApi
+import com.kidsg.data.remote.dto.AddressDto
+import com.kidsg.data.remote.dto.OrderItemRequestDto
 import com.kidsg.data.remote.mapper.toDomain
 import com.kidsg.domain.model.Address
 import com.kidsg.domain.model.CartItem
@@ -36,8 +38,32 @@ class ProductionOrderRepository(
         deliveryAddress: Address,
         paymentMethod: String
     ): Result<Order> {
-        val addressId = deliveryAddress.id.ifBlank { "addr_dev_default" }
-        return when (val res = checkoutApi.createOrder(addressId = addressId, paymentMethod = paymentMethod)) {
+        val addressId = deliveryAddress.id.ifBlank { "addr_default" }
+        val itemDtos = items.map {
+            OrderItemRequestDto(
+                productId = it.product.id,
+                quantity = it.quantity,
+                selectedVariant = it.selectedVariant
+            )
+        }
+        val addrDto = AddressDto(
+            id = addressId,
+            label = deliveryAddress.label,
+            name = deliveryAddress.recipientName,
+            phone = deliveryAddress.phoneNumber,
+            addressLine1 = deliveryAddress.addressLine1,
+            addressLine2 = deliveryAddress.addressLine2,
+            city = deliveryAddress.city,
+            state = "Karnataka",
+            postalCode = deliveryAddress.pincode,
+            isDefault = deliveryAddress.isDefault
+        )
+        return when (val res = checkoutApi.createOrder(
+            addressId = addressId,
+            paymentMethod = paymentMethod,
+            items = itemDtos,
+            deliveryAddress = addrDto
+        )) {
             is ApiResult.Success -> {
                 val createdOrder = res.data.order?.toDomain() ?: Order(
                     id = res.data.orderId,

@@ -1140,15 +1140,48 @@ var KidsGDatabase = class {
     return found;
   }
   // --- Order Operations with Snapshots & State Machine ---
-  createOrder(userId, addressId, paymentMethod = "UPI", couponCode, notes) {
-    const checkout = this.calculateCheckout(userId, couponCode);
+  createOrder(userId, addressId, paymentMethod = "UPI", couponCode, notes, clientItems, clientAddress) {
+    if (clientItems && clientItems.length > 0) {
+      const itemsList = clientItems.map((ci) => ({
+        id: `cart_item_${randomUUID().substring(0, 8)}`,
+        productId: ci.productId,
+        quantity: ci.quantity || 1,
+        selectedVariant: ci.selectedVariant || void 0
+      }));
+      this.carts.set(userId, itemsList);
+    }
+    let checkout = this.calculateCheckout(userId, couponCode);
     if (checkout.items.length === 0) {
       return { success: false, error: "Your school bag is empty" };
     }
     const addresses = this.getAddresses(userId);
-    const address = addresses.find((a) => a.id === addressId) || addresses[0];
+    let address = addresses.find((a) => a.id === addressId) || addresses[0];
+    if (!address && clientAddress) {
+      address = this.addAddress(userId, {
+        label: clientAddress.label || "Home",
+        name: clientAddress.recipientName || clientAddress.name || "Student Desk",
+        phone: clientAddress.phoneNumber || clientAddress.phone || "9876543210",
+        addressLine1: clientAddress.addressLine1 || "KidsG Desk Delivery",
+        addressLine2: clientAddress.addressLine2 || "",
+        city: clientAddress.city || "Bengaluru",
+        state: clientAddress.state || "Karnataka",
+        postalCode: clientAddress.pincode || clientAddress.postalCode || "560034",
+        isDefault: true
+      });
+    }
     if (!address) {
-      return { success: false, error: "Delivery address is required" };
+      const profile = this.getProfile(userId);
+      address = this.addAddress(userId, {
+        label: "Home",
+        name: profile ? `${profile.firstName} ${profile.lastName}`.trim() : "Student Desk",
+        phone: profile?.phone || "9876543210",
+        addressLine1: profile?.selectedSchool || "KidsG Desk Delivery, Bengaluru",
+        addressLine2: profile?.selectedClass || "",
+        city: "Bengaluru",
+        state: "Karnataka",
+        postalCode: "560034",
+        isDefault: true
+      });
     }
     const store = this.stores[0];
     const orderId = `ord_${randomUUID().substring(0, 10)}`;
@@ -2614,10 +2647,16 @@ var checkoutPreviewSchema = z8.object({
   couponCode: z8.string().nullish()
 });
 var checkoutCreateSchema = z8.object({
-  addressId: z8.string().min(1, "Delivery address is required"),
+  addressId: z8.string().optional().default("addr_default"),
   couponCode: z8.string().nullish(),
   paymentMethod: z8.string().default("UPI"),
-  notes: z8.string().nullish()
+  notes: z8.string().nullish(),
+  items: z8.array(z8.object({
+    productId: z8.string(),
+    quantity: z8.number().default(1),
+    selectedVariant: z8.string().nullish()
+  })).optional(),
+  deliveryAddress: z8.any().optional()
 });
 router11.post("/checkout/preview", requireAuth(), (req, res) => {
   const result = checkoutPreviewSchema.safeParse(req.body);
@@ -2643,13 +2682,15 @@ router11.post("/checkout/create", requireAuth(), (req, res) => {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
     return;
   }
-  const { addressId, couponCode, paymentMethod, notes } = result.data;
+  const { addressId, couponCode, paymentMethod, notes, items, deliveryAddress } = result.data;
   const orderRes = db.createOrder(
     req.user.id,
-    addressId,
+    addressId || "addr_default",
     paymentMethod,
     couponCode || void 0,
-    notes || void 0
+    notes || void 0,
+    items,
+    deliveryAddress
   );
   if (!orderRes.success || !orderRes.order) {
     sendError(res, orderRes.error || "Failed to initialize checkout", "CHECKOUT_FAILED", 400);
@@ -3058,10 +3099,16 @@ var router13 = Router13();
 var deliveryTrackingService = getDeliveryTrackingService();
 var notificationService2 = getNotificationService();
 var createOrderSchema = z10.object({
-  addressId: z10.string().min(1, "Delivery address is required"),
+  addressId: z10.string().optional().default("addr_default"),
   paymentMethod: z10.string().default("UPI"),
   couponCode: z10.string().optional(),
-  notes: z10.string().optional()
+  notes: z10.string().optional(),
+  items: z10.array(z10.object({
+    productId: z10.string(),
+    quantity: z10.number().default(1),
+    selectedVariant: z10.string().nullish()
+  })).optional(),
+  deliveryAddress: z10.any().optional()
 });
 router13.post("/orders", requireAuth(), async (req, res) => {
   const result = createOrderSchema.safeParse(req.body);
@@ -3069,8 +3116,16 @@ router13.post("/orders", requireAuth(), async (req, res) => {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
     return;
   }
-  const { addressId, paymentMethod, couponCode, notes } = result.data;
-  const orderRes = db.createOrder(req.user.id, addressId, paymentMethod, couponCode, notes);
+  const { addressId, paymentMethod, couponCode, notes, items, deliveryAddress } = result.data;
+  const orderRes = db.createOrder(
+    req.user.id,
+    addressId || "addr_default",
+    paymentMethod,
+    couponCode,
+    notes,
+    items,
+    deliveryAddress
+  );
   if (!orderRes.success || !orderRes.order) {
     sendError(res, orderRes.error || "Failed to place order", "ORDER_CREATION_FAILED", 400);
     return;

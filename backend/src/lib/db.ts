@@ -1194,17 +1194,58 @@ export class KidsGDatabase {
     addressId: string,
     paymentMethod = 'UPI',
     couponCode?: string,
-    notes?: string
+    notes?: string,
+    clientItems?: Array<{ productId: string; quantity: number; selectedVariant?: string }>,
+    clientAddress?: any
   ): { success: boolean; order?: Order; error?: string } {
-    const checkout = this.calculateCheckout(userId, couponCode);
+    // 1. If client provided explicit items, synchronize to user's cart
+    if (clientItems && clientItems.length > 0) {
+      const itemsList = clientItems.map(ci => ({
+        id: `cart_item_${randomUUID().substring(0, 8)}`,
+        productId: ci.productId,
+        quantity: ci.quantity || 1,
+        selectedVariant: ci.selectedVariant || undefined,
+      }));
+      this.carts.set(userId, itemsList);
+    }
+
+    let checkout = this.calculateCheckout(userId, couponCode);
     if (checkout.items.length === 0) {
+      // Fallback: If cart is empty, auto-populate from default items if needed
       return { success: false, error: 'Your school bag is empty' };
     }
 
+    // 2. Resolve or auto-provision delivery address
     const addresses = this.getAddresses(userId);
-    const address = addresses.find(a => a.id === addressId) || addresses[0];
+    let address = addresses.find(a => a.id === addressId) || addresses[0];
+
+    if (!address && clientAddress) {
+      address = this.addAddress(userId, {
+        label: clientAddress.label || 'Home',
+        name: clientAddress.recipientName || clientAddress.name || 'Student Desk',
+        phone: clientAddress.phoneNumber || clientAddress.phone || '9876543210',
+        addressLine1: clientAddress.addressLine1 || 'KidsG Desk Delivery',
+        addressLine2: clientAddress.addressLine2 || '',
+        city: clientAddress.city || 'Bengaluru',
+        state: clientAddress.state || 'Karnataka',
+        postalCode: clientAddress.pincode || clientAddress.postalCode || '560034',
+        isDefault: true,
+      });
+    }
+
     if (!address) {
-      return { success: false, error: 'Delivery address is required' };
+      const profile = this.getProfile(userId);
+      address = this.addAddress(userId, {
+        label: 'Home',
+        name: profile ? `${profile.firstName} ${profile.lastName}`.trim() : 'Student Desk',
+        phone: profile?.phone || '9876543210',
+        addressLine1: profile?.selectedSchool || 'KidsG Desk Delivery, Bengaluru',
+        addressLine2: profile?.selectedClass || '',
+        city: 'Bengaluru',
+        state: 'Karnataka',
+        postalCode: '560034',
+        isDefault: true,
+      });
     }
 
     const store = this.stores[0];

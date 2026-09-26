@@ -20,6 +20,7 @@ import com.kidsg.core.navigation.BackHandler
 import com.kidsg.core.navigation.Screen
 import com.kidsg.core.storage.SessionStorage
 import com.kidsg.data.repository.RepositoryProvider
+import com.kidsg.domain.model.Address
 import com.kidsg.feature.auth.AuthScreen
 import com.kidsg.feature.bag.SchoolBagScreen
 import com.kidsg.feature.checkout.AddAddressScreen
@@ -95,6 +96,35 @@ fun KidsGApp(
     val cart by cartRepository.cartState.collectAsState()
     val currentUser by authRepository.currentUser.collectAsState()
     val activeOrders by orderRepository.observeActiveOrders().collectAsState(initial = emptyList())
+
+    var selectedDeliveryAddress by remember {
+        mutableStateOf(SessionStorage.getSelectedAddress())
+    }
+
+    androidx.compose.runtime.LaunchedEffect(currentUser, currentLocation) {
+        if (selectedDeliveryAddress == null) {
+            val studentName = currentUser?.studentName?.takeIf { it.isNotBlank() }
+                ?: currentUser?.name?.takeIf { it.isNotBlank() }
+                ?: "Student Desk"
+            val phone = currentUser?.phone?.takeIf { it.isNotBlank() } ?: "9876543210"
+            val school = currentUser?.schoolName?.takeIf { it.isNotBlank() }
+                ?: currentUser?.studentGrade?.takeIf { it.isNotBlank() }
+                ?: currentLocation
+            val defaultAddr = Address(
+                id = "addr_default",
+                label = "Home",
+                recipientName = studentName,
+                phoneNumber = phone,
+                addressLine1 = school.ifBlank { "12, Green Park" },
+                addressLine2 = currentUser?.studentGrade ?: "",
+                city = "Bengaluru",
+                pincode = "560001",
+                isDefault = true
+            )
+            selectedDeliveryAddress = defaultAddr
+            SessionStorage.saveSelectedAddress(defaultAddr)
+        }
+    }
 
     val isTopLevelScreen = currentScreen is Screen.Home ||
             currentScreen is Screen.Discovery ||
@@ -307,10 +337,13 @@ fun KidsGApp(
                         CheckoutScreen(
                             userProfile = currentUser,
                             subtotal = cart.subtotal.takeIf { it > 0 } ?: 260.0,
+                            selectedAddress = selectedDeliveryAddress,
                             onBack = { navigateBack() },
                             onChangeAddress = { navigateTo(Screen.AddAddress) },
-                            onContinueToPayment = { totalAmount, speed ->
-                                navigateTo(Screen.PaymentMethod(totalAmount, speed))
+                            onContinueToPayment = { totalAmount, speed, address ->
+                                selectedDeliveryAddress = address
+                                SessionStorage.saveSelectedAddress(address)
+                                navigateTo(Screen.PaymentMethod(totalAmount, speed, address))
                             }
                         )
                     }
@@ -318,7 +351,9 @@ fun KidsGApp(
                     is Screen.AddAddress -> {
                         AddAddressScreen(
                             onBack = { navigateBack() },
-                            onAddressSaved = {
+                            onAddressSaved = { savedAddr ->
+                                selectedDeliveryAddress = savedAddr
+                                SessionStorage.saveSelectedAddress(savedAddr)
                                 navigateBack()
                             }
                         )
@@ -328,6 +363,7 @@ fun KidsGApp(
                         PaymentMethodScreen(
                             totalAmount = screen.totalAmount,
                             deliverySpeed = screen.deliverySpeed,
+                            deliveryAddress = screen.deliveryAddress ?: selectedDeliveryAddress,
                             onBack = { navigateBack() },
                             onPaymentSuccess = { newOrderId ->
                                 coroutineScope.launch {

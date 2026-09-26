@@ -15,7 +15,11 @@ sealed interface Screen {
     data class Search(val initialQuery: String = "") : Screen
     data object Checkout : Screen
     data object AddAddress : Screen
-    data class PaymentMethod(val totalAmount: Double = 290.0, val deliverySpeed: String = "Standard") : Screen
+    data class PaymentMethod(
+        val totalAmount: Double = 290.0,
+        val deliverySpeed: String = "Standard",
+        val deliveryAddress: com.kidsg.domain.model.Address? = null
+    ) : Screen
     data class OrderSuccess(val orderId: String = "KG-ORDER", val totalAmount: Double = 290.0) : Screen
     data class OrderTracking(val orderId: String = "KG-ORDER") : Screen
     data object Orders : Screen

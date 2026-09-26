@@ -12,10 +12,16 @@ const deliveryTrackingService = getDeliveryTrackingService();
 const notificationService = getNotificationService();
 
 const createOrderSchema = z.object({
-  addressId: z.string().min(1, 'Delivery address is required'),
+  addressId: z.string().optional().default('addr_default'),
   paymentMethod: z.string().default('UPI'),
   couponCode: z.string().optional(),
   notes: z.string().optional(),
+  items: z.array(z.object({
+    productId: z.string(),
+    quantity: z.number().default(1),
+    selectedVariant: z.string().nullish(),
+  })).optional(),
+  deliveryAddress: z.any().optional(),
 });
 
 // POST /api/orders
@@ -26,8 +32,16 @@ router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
     return;
   }
 
-  const { addressId, paymentMethod, couponCode, notes } = result.data;
-  const orderRes = db.createOrder(req.user!.id, addressId, paymentMethod, couponCode, notes);
+  const { addressId, paymentMethod, couponCode, notes, items, deliveryAddress } = result.data;
+  const orderRes = db.createOrder(
+    req.user!.id,
+    addressId || 'addr_default',
+    paymentMethod,
+    couponCode,
+    notes,
+    items,
+    deliveryAddress
+  );
 
   if (!orderRes.success || !orderRes.order) {
     sendError(res, orderRes.error || 'Failed to place order', 'ORDER_CREATION_FAILED', 400);

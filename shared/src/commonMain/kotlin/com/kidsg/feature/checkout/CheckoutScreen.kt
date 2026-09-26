@@ -52,9 +52,10 @@ import com.kidsg.domain.model.UserProfile
 fun CheckoutScreen(
     userProfile: UserProfile?,
     subtotal: Double = 260.0,
+    selectedAddress: Address? = null,
     onBack: () -> Unit,
     onChangeAddress: () -> Unit,
-    onContinueToPayment: (totalAmount: Double, deliverySpeed: String) -> Unit,
+    onContinueToPayment: (totalAmount: Double, deliverySpeed: String, address: Address) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedDeliveryOption by remember { mutableStateOf("Standard") }
@@ -65,6 +66,33 @@ fun CheckoutScreen(
         ?: userProfile?.name?.takeIf { it.isNotBlank() }
         ?: "Aarav Kumar"
     val phone = userProfile?.phone?.takeIf { it.isNotBlank() } ?: "9876543210"
+
+    val effectiveAddress = selectedAddress ?: Address(
+        id = "addr_default",
+        label = "Home",
+        recipientName = studentName,
+        phoneNumber = phone,
+        addressLine1 = userProfile?.schoolName?.takeIf { it.isNotBlank() } ?: "12, Green Park",
+        addressLine2 = userProfile?.studentGrade?.takeIf { it.isNotBlank() } ?: "",
+        city = "Bangalore",
+        pincode = "560001",
+        isDefault = true
+    )
+
+    val addressTitle = effectiveAddress.label.ifBlank { "Home" }
+    val addressText = buildString {
+        append(effectiveAddress.addressLine1)
+        if (!effectiveAddress.addressLine2.isNullOrBlank()) {
+            append(", ${effectiveAddress.addressLine2}")
+        }
+        if (effectiveAddress.city.isNotBlank()) {
+            append(", ${effectiveAddress.city}")
+        }
+        if (effectiveAddress.pincode.isNotBlank()) {
+            append(" - ${effectiveAddress.pincode}")
+        }
+    }
+    val contactText = "${effectiveAddress.recipientName.ifBlank { studentName }}   ${effectiveAddress.phoneNumber.ifBlank { phone }}"
 
     Column(
         modifier = modifier
@@ -139,23 +167,26 @@ fun CheckoutScreen(
                                 .background(KidsGColors.AccentYellowLight),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "🏠", fontSize = 16.sp)
+                            Text(
+                                text = if (addressTitle.contains("School", ignoreCase = true) || addressTitle.contains("Office", ignoreCase = true)) "🏫" else "🏠",
+                                fontSize = 16.sp
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(KidsGSpacing.sm))
 
                         Column {
                             Text(
-                                text = "Home",
+                                text = addressTitle,
                                 style = KidsGTypography.TitleSmall.copy(fontSize = 14.sp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "12, Green Park, Bangalore - 560001",
+                                text = addressText,
                                 style = KidsGTypography.BodySmall.copy(color = KidsGColors.TextSecondary)
                             )
                             Text(
-                                text = "$studentName   $phone",
+                                text = contactText,
                                 style = KidsGTypography.Caption.copy(color = KidsGColors.TextMuted)
                             )
                         }
@@ -232,7 +263,7 @@ fun CheckoutScreen(
 
             KidsGPrimaryButton(
                 text = "Continue to Payment",
-                onClick = { onContinueToPayment(totalAmount, selectedDeliveryOption) }
+                onClick = { onContinueToPayment(totalAmount, selectedDeliveryOption, effectiveAddress) }
             )
         }
     }

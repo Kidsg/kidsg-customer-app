@@ -40,6 +40,8 @@ import com.kidsg.core.designsystem.KidsGPrimaryButton
 import com.kidsg.core.designsystem.KidsGShapes
 import com.kidsg.core.designsystem.KidsGSpacing
 import com.kidsg.core.designsystem.KidsGTypography
+import com.kidsg.core.storage.SessionStorage
+import com.kidsg.domain.model.Address
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -50,6 +52,7 @@ import kotlinx.coroutines.launch
 fun PaymentMethodScreen(
     totalAmount: Double = 290.0,
     deliverySpeed: String = "Standard",
+    deliveryAddress: Address? = null,
     onBack: () -> Unit,
     onPaymentSuccess: (orderId: String) -> Unit,
     orderRepository: com.kidsg.domain.repository.OrderRepository = remember { com.kidsg.data.repository.RepositoryProvider.orderRepository },
@@ -212,21 +215,25 @@ fun PaymentMethodScreen(
                         isProcessing = true
                         errorMessage = null
                         coroutineScope.launch {
-                            val items = cartRepository.cartState.value.items
-                            val defaultAddr = com.kidsg.domain.model.Address(
-                                id = "addr_default",
-                                label = "Home",
-                                recipientName = "Student",
-                                phoneNumber = "+91 98765 43210",
-                                addressLine1 = "KidsG Desk Delivery",
-                                addressLine2 = "",
-                                city = "Bengaluru",
-                                pincode = "560034",
-                                isDefault = true
-                            )
+                            val currentItems = cartRepository.cartState.value.items.ifEmpty {
+                                SessionStorage.getSavedCartItems()
+                            }
+                            val addr = deliveryAddress
+                                ?: SessionStorage.getSelectedAddress()
+                                ?: Address(
+                                    id = "addr_default",
+                                    label = "Home",
+                                    recipientName = "Student Desk",
+                                    phoneNumber = "+91 98765 43210",
+                                    addressLine1 = "KidsG Desk Delivery",
+                                    addressLine2 = "",
+                                    city = "Bengaluru",
+                                    pincode = "560034",
+                                    isDefault = true
+                                )
                             val result = orderRepository.createOrder(
-                                items = items,
-                                deliveryAddress = defaultAddr,
+                                items = currentItems,
+                                deliveryAddress = addr,
                                 paymentMethod = selectedMethod
                             )
                             isProcessing = false

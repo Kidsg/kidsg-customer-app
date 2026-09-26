@@ -176,11 +176,23 @@ class CheckoutApi {
         )
     }
 
-    suspend fun createOrder(addressId: String, couponCode: String? = null, paymentMethod: String = "UPI"): ApiResult<CheckoutCreateResponseDto> {
+    suspend fun createOrder(
+        addressId: String = "addr_default",
+        couponCode: String? = null,
+        paymentMethod: String = "UPI",
+        items: List<OrderItemRequestDto> = emptyList(),
+        deliveryAddress: AddressDto? = null
+    ): ApiResult<CheckoutCreateResponseDto> {
         return safeApiCallWithBody(
             HttpMethod.Post,
             Endpoints.CHECKOUT_CREATE,
-            bodyData = CheckoutCreateRequestDto(addressId, paymentMethod, couponCode)
+            bodyData = CheckoutCreateRequestDto(
+                addressId = addressId,
+                paymentMethod = paymentMethod,
+                couponCode = couponCode,
+                items = items,
+                deliveryAddress = deliveryAddress
+            )
         )
     }
 }
