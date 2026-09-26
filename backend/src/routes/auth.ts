@@ -105,6 +105,7 @@ router.post('/auth/login-password', rateLimit(15, 60000, 'auth_login_password'),
   if (authRes.success && authRes.user) {
     const token = `kidsg-jwt-${authRes.user.id}`;
     sendSuccess(res, {
+      verified: true,
       token,
       user: authRes.user,
       profile: authRes.user,
@@ -140,6 +141,7 @@ router.post('/auth/login-password', rateLimit(15, 60000, 'auth_login_password'),
       }
 
       sendSuccess(res, {
+        verified: true,
         token: supaAuth.session?.access_token || `kidsg-jwt-${supaAuth.user.id}`,
         user: profile,
         profile,
@@ -215,6 +217,7 @@ router.post('/auth/signup', rateLimit(15, 60000, 'auth_signup'), async (req: Req
   }
 
   sendSuccess(res, {
+    verified: true,
     token,
     user: profile,
     profile,

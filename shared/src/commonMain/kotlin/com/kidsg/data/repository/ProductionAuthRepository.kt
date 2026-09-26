@@ -39,14 +39,16 @@ class ProductionAuthRepository(
             is ApiResult.Success -> {
                 ApiConfig.authToken = res.data.token
                 SessionStorage.saveAuthToken(res.data.token)
+                val u = res.data.user
+                val p = res.data.profile
                 val profile = UserProfile(
-                    id = res.data.user.id,
-                    name = "${res.data.user.firstName ?: "Student"} ${res.data.user.lastName ?: ""}".trim(),
-                    phone = res.data.user.phone ?: "",
-                    email = res.data.user.email ?: email,
-                    studentName = res.data.user.firstName ?: "Student",
-                    studentGrade = res.data.profile?.selectedClass ?: "Class 7",
-                    schoolName = res.data.profile?.selectedSchool ?: "KidsG Partner School"
+                    id = u?.id ?: p?.id ?: "user_id",
+                    name = "${u?.firstName ?: p?.firstName ?: "Student"} ${u?.lastName ?: p?.lastName ?: ""}".trim(),
+                    phone = u?.phone ?: p?.phone ?: "",
+                    email = u?.email ?: p?.email ?: email,
+                    studentName = u?.firstName ?: p?.firstName ?: "Student",
+                    studentGrade = p?.selectedClass ?: "Class 7",
+                    schoolName = p?.selectedSchool ?: "KidsG Partner School"
                 )
                 _currentUser.value = profile
                 SessionStorage.saveUserProfile(profile)
@@ -80,8 +82,10 @@ class ProductionAuthRepository(
             is ApiResult.Success -> {
                 ApiConfig.authToken = res.data.token
                 SessionStorage.saveAuthToken(res.data.token)
+                val u = res.data.user
+                val p = res.data.profile
                 val profile = UserProfile(
-                    id = res.data.user.id,
+                    id = u?.id ?: p?.id ?: "user_new",
                     name = "$firstName $lastName".trim(),
                     phone = phone,
                     email = email,
@@ -119,14 +123,16 @@ class ProductionAuthRepository(
             is ApiResult.Success -> {
                 ApiConfig.authToken = res.data.token
                 SessionStorage.saveAuthToken(res.data.token)
+                val u = res.data.user
+                val p = res.data.profile
                 val profile = UserProfile(
-                    id = res.data.user.id,
-                    name = "${res.data.user.firstName ?: "Student"} ${res.data.user.lastName ?: ""}".trim(),
-                    phone = res.data.user.phone ?: if (!phoneNumber.contains("@")) phoneNumber else "",
-                    email = res.data.user.email ?: if (phoneNumber.contains("@")) phoneNumber else "$phoneNumber@kidsg.in",
-                    studentName = res.data.user.firstName ?: "",
-                    studentGrade = res.data.profile?.selectedClass ?: "Class 1",
-                    schoolName = res.data.profile?.selectedSchool ?: "KidsG Partner School"
+                    id = u?.id ?: p?.id ?: "user_id",
+                    name = "${u?.firstName ?: p?.firstName ?: "Student"} ${u?.lastName ?: p?.lastName ?: ""}".trim(),
+                    phone = u?.phone ?: if (!phoneNumber.contains("@")) phoneNumber else "",
+                    email = u?.email ?: if (phoneNumber.contains("@")) phoneNumber else "$phoneNumber@kidsg.in",
+                    studentName = u?.firstName ?: p?.firstName ?: "",
+                    studentGrade = p?.selectedClass ?: "Class 1",
+                    schoolName = p?.selectedSchool ?: "KidsG Partner School"
                 )
                 _currentUser.value = profile
                 SessionStorage.saveUserProfile(profile)

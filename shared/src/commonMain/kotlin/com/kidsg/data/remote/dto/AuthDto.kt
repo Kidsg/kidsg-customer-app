@@ -55,10 +55,11 @@ data class SendOtpResponseDto(
 
 @Serializable
 data class VerifyOtpResponseDto(
-    val verified: Boolean,
-    val token: String,
-    val user: UserDto,
-    val profile: ProfileDto? = null
+    val verified: Boolean = true,
+    val token: String = "",
+    val user: UserDto? = null,
+    val profile: ProfileDto? = null,
+    val isNewUser: Boolean = false
 )
 
 @Serializable

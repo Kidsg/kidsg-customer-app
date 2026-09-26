@@ -1928,6 +1928,7 @@ router2.post("/auth/login-password", rateLimit(15, 6e4, "auth_login_password"), 
   if (authRes.success && authRes.user) {
     const token = `kidsg-jwt-${authRes.user.id}`;
     sendSuccess(res, {
+      verified: true,
       token,
       user: authRes.user,
       profile: authRes.user
@@ -1959,6 +1960,7 @@ router2.post("/auth/login-password", rateLimit(15, 6e4, "auth_login_password"), 
         db.updateProfile(supaAuth.user.id, profile);
       }
       sendSuccess(res, {
+        verified: true,
         token: supaAuth.session?.access_token || `kidsg-jwt-${supaAuth.user.id}`,
         user: profile,
         profile
@@ -2021,6 +2023,7 @@ router2.post("/auth/signup", rateLimit(15, 6e4, "auth_signup"), async (req, res)
     console.warn("[KidsG][Supabase] User sync notice:", err?.message);
   }
   sendSuccess(res, {
+    verified: true,
     token,
     user: profile,
     profile
