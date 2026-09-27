@@ -6,6 +6,7 @@ import { getDeliveryTrackingService } from '../services/delivery/DeliveryTrackin
 import { getNotificationService } from '../services/notification/NotificationService.js';
 import { db } from '../lib/db.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { syncOrderToSupabase } from '../lib/supabaseSync.js';
 
 const router = Router();
 const deliveryTrackingService = getDeliveryTrackingService();
@@ -52,34 +53,10 @@ router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
 
   const order = orderRes.order;
 
-  // Sync to Supabase PostgreSQL orders table if configured
-  try {
-    const userEmail = req.user?.email;
-    if (userEmail) {
-      supabaseAdmin.from('profiles').select('id').eq('email', userEmail).single()
-        .then(({ data: profile }) => {
-          if (profile?.id) {
-            supabaseAdmin.from('orders').insert({
-              order_number: order.orderNumber,
-              user_id: profile.id,
-              status: order.status,
-              subtotal: order.subtotal,
-              discount: order.discount,
-              coupon_discount: order.couponDiscount,
-              delivery_fee: order.deliveryFee,
-              tax: order.tax,
-              total: order.total,
-              payment_status: order.paymentStatus,
-              payment_method: order.paymentMethod,
-              delivery_status: order.deliveryStatus,
-              delivery_address_snapshot: order.addressSnapshot,
-            }).catch(err => console.warn('[KidsG][Supabase] Order insert notice:', err?.message));
-          }
-        }).catch(err => console.warn('[KidsG][Supabase] Profile lookup notice:', err?.message));
-    }
-  } catch (e: any) {
+  const userEmail = req.user?.email || 'student@kidsg.in';
+  syncOrderToSupabase(userEmail, order, deliveryAddress).catch(e => {
     console.warn('[KidsG][Supabase] Order sync warning:', e?.message);
-  }
+  });
 
   // Send notification to customer
   await notificationService.send(

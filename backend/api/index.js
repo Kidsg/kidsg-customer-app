@@ -1,7 +1,7 @@
 // src/server.ts
 import express from "express";
 import cors from "cors";
-import { randomUUID as randomUUID4 } from "crypto";
+import { randomUUID as randomUUID5 } from "crypto";
 
 // src/config/env.ts
 import { z } from "zod";
@@ -187,48 +187,8 @@ if (isConfigured) {
 var supabaseAdmin = supabaseClient;
 var supabaseAuth = supabaseAuthClient;
 
-// src/routes/health.ts
-var router = Router();
-router.get("/health", async (_req, res) => {
-  const isSupaConfigured = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
-  let supaStatus = isSupaConfigured ? "connecting" : "mock_standalone";
-  let supaError = null;
-  let profilesCount = null;
-  if (isSupaConfigured) {
-    try {
-      const { count, error } = await supabaseAdmin.from("profiles").select("*", { count: "exact", head: true });
-      if (error) {
-        supaStatus = "error";
-        supaError = error.message;
-      } else {
-        supaStatus = "connected";
-        profilesCount = count ?? 0;
-      }
-    } catch (e) {
-      supaStatus = "error";
-      supaError = e?.message || "Unknown connection error";
-    }
-  }
-  res.json({
-    success: true,
-    service: "kidsG-api",
-    status: "ok",
-    environment: env.NODE_ENV,
-    appEnv: env.APP_ENV,
-    supabase: {
-      configured: isSupaConfigured,
-      url: env.SUPABASE_URL.replace(/https:\/\/(.{4}).*(\.supabase\.co)/, "https://$1...$2"),
-      status: supaStatus,
-      error: supaError,
-      profilesCount
-    }
-  });
-});
-var health_default = router;
-
-// src/routes/auth.ts
-import { Router as Router2 } from "express";
-import { z as z2 } from "zod";
+// src/lib/supabaseSync.ts
+import { randomUUID as randomUUID2 } from "crypto";
 
 // src/lib/db.ts
 import { randomUUID, scryptSync, randomBytes } from "crypto";
@@ -1563,6 +1523,324 @@ var KidsGDatabase = class {
 };
 var db = new KidsGDatabase();
 
+// src/lib/supabaseSync.ts
+async function seedSupabaseCatalog() {
+  const isConfigured2 = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  if (!isConfigured2) {
+    return { success: false, categoriesCount: 0, productsCount: 0, storesCount: 0, couponsCount: 0, error: "Supabase not configured" };
+  }
+  try {
+    const categoryMapping = {
+      "cat_notebooks": "c0000000-0000-0000-0000-000000000001",
+      "cat_pens": "c0000000-0000-0000-0000-000000000002",
+      "cat_pencils": "c0000000-0000-0000-0000-000000000003",
+      "cat_geometry": "c0000000-0000-0000-0000-000000000004",
+      "cat_art": "c0000000-0000-0000-0000-000000000005",
+      "cat_exam": "c0000000-0000-0000-0000-000000000006",
+      "cat_highlighters": "c0000000-0000-0000-0000-000000000007",
+      "cat_sticky": "c0000000-0000-0000-0000-000000000008",
+      "cat_bags": "c0000000-0000-0000-0000-000000000009",
+      "cat_bottles": "c0000000-0000-0000-0000-000000000010"
+    };
+    const categories = db.getCategories();
+    for (const cat of categories) {
+      const uuid = categoryMapping[cat.id] || `c0000000-0000-0000-0000-${cat.displayOrder.toString().padStart(12, "0")}`;
+      await supabaseAdmin.from("categories").upsert({
+        id: uuid,
+        name: cat.name,
+        slug: cat.slug,
+        icon_name: cat.iconName,
+        display_order: cat.displayOrder,
+        is_active: cat.isActive
+      }, { onConflict: "slug" });
+    }
+    const stores = db.getStores();
+    for (let i = 0; i < stores.length; i++) {
+      const s = stores[i];
+      const uuid = `s0000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
+      await supabaseAdmin.from("stores").upsert({
+        id: uuid,
+        name: s.name,
+        address: s.address,
+        city: "Bengaluru",
+        latitude: s.location.latitude,
+        longitude: s.location.longitude,
+        phone: s.phone,
+        delivery_radius_km: s.deliveryRadiusKm,
+        is_active: s.isActive,
+        open_time: s.operatingHours.open,
+        close_time: s.operatingHours.close
+      }, { onConflict: "id" });
+    }
+    const { products } = db.getProducts({ limit: 100 });
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i];
+      const prodUuid = `p0000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
+      const catUuid = categoryMapping[p.categoryId] || "c0000000-0000-0000-0000-000000000001";
+      await supabaseAdmin.from("products").upsert({
+        id: prodUuid,
+        name: p.name,
+        slug: p.slug,
+        description: p.description,
+        brand: p.brand,
+        category_id: catUuid,
+        image_url: p.imageUrl,
+        price: p.price,
+        mrp: p.mrp,
+        discount_percent: p.discountPercent,
+        stock: p.stock,
+        unit: p.unit,
+        grade_level: p.gradeLevel,
+        is_featured: p.isFeatured,
+        is_active: p.isActive,
+        specs: p.specs
+      }, { onConflict: "slug" });
+    }
+    const coupons = db.getCoupons();
+    for (let i = 0; i < coupons.length; i++) {
+      const cp = coupons[i];
+      const cpUuid = `cp000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
+      await supabaseAdmin.from("coupons").upsert({
+        id: cpUuid,
+        code: cp.code,
+        description: cp.description,
+        discount_type: cp.discountType,
+        discount_value: cp.discountValue,
+        min_order_value: cp.minOrderValue,
+        max_discount_amount: cp.maxDiscountAmount || null,
+        valid_until: cp.validUntil,
+        is_active: cp.isActive
+      }, { onConflict: "code" });
+    }
+    return {
+      success: true,
+      categoriesCount: categories.length,
+      productsCount: products.length,
+      storesCount: stores.length,
+      couponsCount: coupons.length
+    };
+  } catch (err) {
+    console.error("[KidsG][Supabase] Seed error:", err);
+    return {
+      success: false,
+      categoriesCount: 0,
+      productsCount: 0,
+      storesCount: 0,
+      couponsCount: 0,
+      error: err?.message || "Failed to seed Supabase"
+    };
+  }
+}
+async function syncOrderToSupabase(userEmail, order, clientAddress) {
+  const isConfigured2 = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  if (!isConfigured2) return;
+  try {
+    let profileId = null;
+    const { data: existingProfile } = await supabaseAdmin.from("profiles").select("id").eq("email", userEmail).maybeSingle();
+    if (existingProfile?.id) {
+      profileId = existingProfile.id;
+    } else {
+      const { data: newProf, error: pErr } = await supabaseAdmin.from("profiles").upsert({
+        email: userEmail,
+        first_name: order.addressSnapshot?.name || clientAddress?.recipientName || "Student",
+        last_name: "",
+        phone: order.addressSnapshot?.phone || clientAddress?.phoneNumber || null,
+        role: "CUSTOMER",
+        onboarding_completed: true
+      }, { onConflict: "email" }).select("id").maybeSingle();
+      if (!pErr && newProf?.id) {
+        profileId = newProf.id;
+      }
+    }
+    if (!profileId) {
+      console.warn("[KidsG][Supabase] Profile lookup/creation failed during order sync");
+      return;
+    }
+    let storeId = "s0000000-0000-0000-0000-000000000001";
+    const { data: storeData } = await supabaseAdmin.from("stores").select("id").limit(1).maybeSingle();
+    if (storeData?.id) {
+      storeId = storeData.id;
+    } else {
+      await supabaseAdmin.from("stores").insert({
+        id: storeId,
+        name: order.storeSnapshot?.name || "Vidya Book & Stationery Depot",
+        address: order.storeSnapshot?.address || "No. 42, 12th Main Road, Bengaluru",
+        city: "Bengaluru",
+        phone: "+91 80 2553 1234",
+        latitude: 12.9352,
+        longitude: 77.6245,
+        delivery_radius_km: 5,
+        is_active: true
+      });
+    }
+    try {
+      await supabaseAdmin.from("addresses").insert({
+        user_id: profileId,
+        label: order.addressSnapshot?.label || clientAddress?.label || "Home",
+        name: order.addressSnapshot?.name || clientAddress?.recipientName || "Student Desk",
+        phone: order.addressSnapshot?.phone || clientAddress?.phoneNumber || "9876543210",
+        address_line_1: order.addressSnapshot?.addressLine1 || clientAddress?.addressLine1 || "KidsG Desk Delivery",
+        address_line_2: order.addressSnapshot?.addressLine2 || clientAddress?.addressLine2 || "",
+        city: order.addressSnapshot?.city || clientAddress?.city || "Bengaluru",
+        state: "Karnataka",
+        postal_code: order.addressSnapshot?.postalCode || clientAddress?.pincode || "560001",
+        is_default: true
+      });
+    } catch (_addrErr) {
+    }
+    const { data: insertedOrder, error: orderErr } = await supabaseAdmin.from("orders").insert({
+      order_number: order.orderNumber,
+      user_id: profileId,
+      store_id: storeId,
+      status: order.status,
+      subtotal: order.subtotal,
+      discount: order.discount,
+      coupon_discount: order.couponDiscount,
+      delivery_fee: order.deliveryFee,
+      tax: order.tax,
+      total: order.total,
+      payment_status: order.paymentStatus,
+      payment_method: order.paymentMethod,
+      delivery_status: order.deliveryStatus,
+      address_snapshot: order.addressSnapshot,
+      notes: order.notes || ""
+    }).select("id").maybeSingle();
+    if (orderErr) {
+      console.error("[KidsG][Supabase] Order insert error:", orderErr.message);
+      return;
+    }
+    const orderDbId = insertedOrder?.id;
+    if (!orderDbId) return;
+    for (const item of order.items) {
+      let prodDbId = "p0000000-0000-0000-0000-000000000001";
+      const { data: prodData } = await supabaseAdmin.from("products").select("id").eq("slug", item.product?.slug || item.productId).maybeSingle();
+      if (prodData?.id) {
+        prodDbId = prodData.id;
+      } else {
+        const { data: catData } = await supabaseAdmin.from("categories").select("id").limit(1).maybeSingle();
+        const catId = catData?.id || "c0000000-0000-0000-0000-000000000001";
+        const { data: newProd } = await supabaseAdmin.from("products").insert({
+          name: item.product?.name || "Classmate Stationery",
+          slug: item.product?.slug || item.productId || `prod_${randomUUID2().substring(0, 8)}`,
+          description: item.product?.description || "School stationery item",
+          brand: item.product?.brand || "Classmate",
+          category_id: catId,
+          image_url: item.product?.imageUrl || "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500",
+          price: item.priceSnapshot || 95,
+          mrp: item.mrpSnapshot || 110,
+          discount_percent: 10,
+          stock: 50,
+          unit: "piece",
+          grade_level: "All",
+          is_active: true
+        }).select("id").maybeSingle();
+        if (newProd?.id) prodDbId = newProd.id;
+      }
+      await supabaseAdmin.from("order_items").insert({
+        order_id: orderDbId,
+        product_id: prodDbId,
+        product_name_snapshot: item.product?.name || "Stationery Item",
+        price_snapshot: item.priceSnapshot,
+        mrp_snapshot: item.mrpSnapshot,
+        quantity: item.quantity,
+        variant_snapshot: item.selectedVariant || null
+      });
+    }
+    await supabaseAdmin.from("payments").insert({
+      order_id: orderDbId,
+      amount: order.total,
+      currency: "INR",
+      method: order.paymentMethod,
+      status: order.paymentStatus,
+      transaction_id: `txn_${randomUUID2().substring(0, 10)}`,
+      gateway: "MOCK"
+    });
+    await supabaseAdmin.from("delivery_tracking").insert({
+      order_id: orderDbId,
+      status: order.deliveryStatus || "CONFIRMED",
+      current_location_lat: 12.9352,
+      current_location_lng: 77.6245,
+      estimated_delivery_time: new Date(Date.now() + 15 * 60 * 1e3).toISOString()
+    });
+    console.log(`[KidsG][Supabase] Successfully synced order ${order.orderNumber} to Supabase!`);
+  } catch (err) {
+    console.error("[KidsG][Supabase] syncOrderToSupabase unexpected error:", err?.message);
+  }
+}
+
+// src/routes/health.ts
+var router = Router();
+router.get("/health", async (req, res) => {
+  const isSupaConfigured = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  let supaStatus = isSupaConfigured ? "connecting" : "mock_standalone";
+  let supaError = null;
+  let profilesCount = null;
+  let categoriesCount = null;
+  let productsCount = null;
+  let ordersCount = null;
+  let seededNow = false;
+  if (isSupaConfigured) {
+    try {
+      const [profRes, catRes, prodRes, ordRes] = await Promise.all([
+        supabaseAdmin.from("profiles").select("*", { count: "exact", head: true }),
+        supabaseAdmin.from("categories").select("*", { count: "exact", head: true }),
+        supabaseAdmin.from("products").select("*", { count: "exact", head: true }),
+        supabaseAdmin.from("orders").select("*", { count: "exact", head: true })
+      ]);
+      if (profRes.error) {
+        supaStatus = "error";
+        supaError = profRes.error.message;
+      } else {
+        supaStatus = "connected";
+        profilesCount = profRes.count ?? 0;
+        categoriesCount = catRes.count ?? 0;
+        productsCount = prodRes.count ?? 0;
+        ordersCount = ordRes.count ?? 0;
+        if (categoriesCount === 0 || req.query.seed === "true") {
+          const seedResult = await seedSupabaseCatalog();
+          if (seedResult.success) {
+            seededNow = true;
+            categoriesCount = seedResult.categoriesCount;
+            productsCount = seedResult.productsCount;
+          }
+        }
+      }
+    } catch (e) {
+      supaStatus = "error";
+      supaError = e?.message || "Unknown connection error";
+    }
+  }
+  res.json({
+    success: true,
+    service: "kidsG-api",
+    status: "ok",
+    environment: env.NODE_ENV,
+    appEnv: env.APP_ENV,
+    supabase: {
+      configured: isSupaConfigured,
+      url: env.SUPABASE_URL.replace(/https:\/\/(.{4}).*(\.supabase\.co)/, "https://$1...$2"),
+      status: supaStatus,
+      error: supaError,
+      counts: {
+        profiles: profilesCount,
+        categories: categoriesCount,
+        products: productsCount,
+        orders: ordersCount
+      },
+      seededNow
+    }
+  });
+});
+router.post("/admin/seed", async (_req, res) => {
+  const result = await seedSupabaseCatalog();
+  res.json(result);
+});
+var health_default = router;
+
+// src/routes/auth.ts
+import { Router as Router2 } from "express";
+import { z as z2 } from "zod";
+
 // src/middleware/auth.ts
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization;
@@ -2795,6 +3073,10 @@ router11.post("/checkout/create", requireAuth(), (req, res) => {
     sendError(res, orderRes.error || "Failed to initialize checkout", "CHECKOUT_FAILED", 400);
     return;
   }
+  const userEmail = req.user?.email || "student@kidsg.in";
+  syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress).catch((e) => {
+    console.warn("[KidsG][Supabase] Async checkout sync notice:", e?.message);
+  });
   sendSuccess(res, {
     orderId: orderRes.order.id,
     orderNumber: orderRes.order.orderNumber,
@@ -2810,12 +3092,12 @@ import { Router as Router12 } from "express";
 import { z as z9 } from "zod";
 
 // src/services/payment/MockPaymentService.ts
-import { randomUUID as randomUUID2 } from "crypto";
+import { randomUUID as randomUUID3 } from "crypto";
 var MockPaymentService = class _MockPaymentService {
   static payments = /* @__PURE__ */ new Map();
   async createPayment(orderId, amount, currency = "INR", metadata = {}) {
-    const paymentId = `pay_mock_${randomUUID2().substring(0, 12)}`;
-    const gatewayOrderId = `order_mock_${randomUUID2().substring(0, 12)}`;
+    const paymentId = `pay_mock_${randomUUID3().substring(0, 12)}`;
+    const gatewayOrderId = `order_mock_${randomUUID3().substring(0, 12)}`;
     const intent = {
       paymentId,
       orderId,
@@ -2823,7 +3105,7 @@ var MockPaymentService = class _MockPaymentService {
       currency,
       provider: "mock",
       gatewayOrderId,
-      clientSecret: `sec_mock_${randomUUID2().substring(0, 16)}`,
+      clientSecret: `sec_mock_${randomUUID3().substring(0, 16)}`,
       metadata: {
         ...metadata,
         isDevelopmentMock: true
@@ -2856,7 +3138,7 @@ var MockPaymentService = class _MockPaymentService {
   async refundPayment(paymentId, _amount) {
     return {
       success: true,
-      refundId: `rfnd_mock_${randomUUID2().substring(0, 10)}`,
+      refundId: `rfnd_mock_${randomUUID3().substring(0, 10)}`,
       message: "Mock payment refunded successfully"
     };
   }
@@ -2980,7 +3262,7 @@ function getPaymentService() {
 }
 
 // src/services/notification/NotificationService.ts
-import { randomUUID as randomUUID3 } from "crypto";
+import { randomUUID as randomUUID4 } from "crypto";
 var MockNotificationService = class _MockNotificationService {
   static notifications = [
     {
@@ -3004,7 +3286,7 @@ var MockNotificationService = class _MockNotificationService {
   ];
   async send(userId, type, title, message, data) {
     const item = {
-      id: `notif_${randomUUID3().substring(0, 10)}`,
+      id: `notif_${randomUUID4().substring(0, 10)}`,
       userId,
       type,
       title,
@@ -3232,32 +3514,10 @@ router13.post("/orders", requireAuth(), async (req, res) => {
     return;
   }
   const order = orderRes.order;
-  try {
-    const userEmail = req.user?.email;
-    if (userEmail) {
-      supabaseAdmin.from("profiles").select("id").eq("email", userEmail).single().then(({ data: profile }) => {
-        if (profile?.id) {
-          supabaseAdmin.from("orders").insert({
-            order_number: order.orderNumber,
-            user_id: profile.id,
-            status: order.status,
-            subtotal: order.subtotal,
-            discount: order.discount,
-            coupon_discount: order.couponDiscount,
-            delivery_fee: order.deliveryFee,
-            tax: order.tax,
-            total: order.total,
-            payment_status: order.paymentStatus,
-            payment_method: order.paymentMethod,
-            delivery_status: order.deliveryStatus,
-            delivery_address_snapshot: order.addressSnapshot
-          }).catch((err) => console.warn("[KidsG][Supabase] Order insert notice:", err?.message));
-        }
-      }).catch((err) => console.warn("[KidsG][Supabase] Profile lookup notice:", err?.message));
-    }
-  } catch (e) {
+  const userEmail = req.user?.email || "student@kidsg.in";
+  syncOrderToSupabase(userEmail, order, deliveryAddress).catch((e) => {
     console.warn("[KidsG][Supabase] Order sync warning:", e?.message);
-  }
+  });
   await notificationService2.send(
     req.user.id,
     "ORDER_CONFIRMED",
@@ -3506,7 +3766,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use((req, res, next) => {
-  const requestId = req.headers["x-request-id"] || `req_${randomUUID4().substring(0, 8)}`;
+  const requestId = req.headers["x-request-id"] || `req_${randomUUID5().substring(0, 8)}`;
   req.headers["x-request-id"] = requestId;
   res.setHeader("X-Request-Id", requestId);
   const start = Date.now();

@@ -47,6 +47,8 @@ router.post('/checkout/preview', requireAuth(), (req: Request, res: Response) =>
   });
 });
 
+import { syncOrderToSupabase } from '../lib/supabaseSync.js';
+
 // POST /api/checkout/create
 router.post('/checkout/create', requireAuth(), (req: Request, res: Response) => {
   const result = checkoutCreateSchema.safeParse(req.body);
@@ -70,6 +72,11 @@ router.post('/checkout/create', requireAuth(), (req: Request, res: Response) => 
     sendError(res, orderRes.error || 'Failed to initialize checkout', 'CHECKOUT_FAILED', 400);
     return;
   }
+
+  const userEmail = req.user?.email || 'student@kidsg.in';
+  syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress).catch(e => {
+    console.warn('[KidsG][Supabase] Async checkout sync notice:', e?.message);
+  });
 
   sendSuccess(res, {
     orderId: orderRes.order.id,
