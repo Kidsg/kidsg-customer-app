@@ -2151,13 +2151,36 @@ function extractBearerToken(req) {
 async function parseToken(token) {
   if (token.startsWith("kidsg-jwt-") || token.startsWith("dev-token-")) {
     const userId = token.replace("kidsg-jwt-", "").replace("dev-token-", "");
-    const profile = db.getProfile(userId);
+    let profile = db.getProfile(userId);
+    if (!profile) {
+      try {
+        const { data: supaProf } = await supabaseAdmin.from("profiles").select("*").or(`id.eq.${userId},auth_user_id.eq.${userId}`).maybeSingle();
+        if (supaProf?.id) {
+          profile = {
+            id: supaProf.id,
+            authUserId: supaProf.auth_user_id || supaProf.id,
+            email: supaProf.email,
+            firstName: supaProf.first_name || "Student",
+            lastName: supaProf.last_name || "",
+            phone: supaProf.phone || "",
+            role: supaProf.role || "CUSTOMER",
+            onboardingCompleted: supaProf.onboarding_completed ?? true,
+            selectedClass: supaProf.selected_class || "Class 1",
+            selectedSchool: supaProf.selected_school || "KidsG Partner School",
+            createdAt: supaProf.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+            updatedAt: supaProf.updated_at || (/* @__PURE__ */ new Date()).toISOString()
+          };
+          db.updateProfile(supaProf.id, profile);
+        }
+      } catch (_e) {
+      }
+    }
     if (!profile) {
       return null;
     }
     return {
-      id: userId,
-      authUserId: userId,
+      id: profile.id || userId,
+      authUserId: profile.authUserId || userId,
       phone: profile?.phone,
       email: profile?.email,
       role: profile?.role || "CUSTOMER",
