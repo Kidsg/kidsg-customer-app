@@ -32,7 +32,7 @@ router.get('/onboarding', requireAuth(), (req: Request, res: Response) => {
 });
 
 // POST /api/onboarding/complete
-router.post('/onboarding/complete', requireAuth(), (req: Request, res: Response) => {
+router.post('/onboarding/complete', requireAuth(), async (req: Request, res: Response) => {
   const result = onboardingCompleteSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
@@ -51,7 +51,7 @@ router.post('/onboarding/complete', requireAuth(), (req: Request, res: Response)
     const userEmail = req.user?.email;
     if (userEmail) {
       const nameParts = (req.user?.name || 'Student User').split(' ');
-      supabaseAdmin.from('profiles').upsert({
+      await supabaseAdmin.from('profiles').upsert({
         email: userEmail,
         first_name: nameParts[0] || 'Student',
         last_name: nameParts.slice(1).join(' ') || '',
@@ -59,7 +59,7 @@ router.post('/onboarding/complete', requireAuth(), (req: Request, res: Response)
         selected_class: selectedClass,
         selected_school: selectedSchool,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'email' }).catch(e => console.warn('[KidsG][Supabase] Profile sync notice:', e?.message));
+      }, { onConflict: 'email' });
     }
   } catch (e: any) {
     console.warn('[KidsG][Supabase] Profile sync notice:', e?.message);

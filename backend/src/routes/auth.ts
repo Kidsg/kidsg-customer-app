@@ -113,43 +113,47 @@ router.post('/auth/login-password', rateLimit(15, 60000, 'auth_login_password'),
     return;
   }
 
-  // 2. Try Supabase Auth if configured
+  // 2. Try Supabase Auth
   try {
-    const { data: supaAuth, error: supaErr } = await supabaseAuth.auth.signInWithPassword({
+    const { data: supaAuth, error: supaErr } = await supabaseAdmin.auth.signInWithPassword({
       email: emailClean,
       password,
     });
 
     if (!supaErr && supaAuth.user) {
-      let profile = db.getProfile(supaAuth.user.id);
-      if (!profile) {
-        profile = {
-          id: supaAuth.user.id,
-          authUserId: supaAuth.user.id,
-          email: emailClean,
-          firstName: supaAuth.user.user_metadata?.first_name || 'Student',
-          lastName: supaAuth.user.user_metadata?.last_name || '',
-          phone: supaAuth.user.phone || '',
-          role: supaAuth.user.user_metadata?.role || 'CUSTOMER',
-          onboardingCompleted: true,
-          selectedClass: 'Class 7',
-          selectedSchool: 'KidsG Partner School',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        db.updateProfile(supaAuth.user.id, profile);
-      }
+      // Authoritatively fetch saved student profile from Supabase profiles table
+      const { data: supaProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('email', emailClean)
+        .maybeSingle();
+
+      const profile = {
+        id: supaProfile?.id || supaAuth.user.id,
+        authUserId: supaAuth.user.id,
+        email: emailClean,
+        firstName: supaProfile?.first_name || supaAuth.user.user_metadata?.first_name || 'Student',
+        lastName: supaProfile?.last_name || supaAuth.user.user_metadata?.last_name || '',
+        phone: supaProfile?.phone || supaAuth.user.phone || '',
+        role: supaProfile?.role || supaAuth.user.user_metadata?.role || 'CUSTOMER',
+        onboardingCompleted: supaProfile?.onboarding_completed ?? true,
+        selectedClass: supaProfile?.selected_class || 'Class 1',
+        selectedSchool: supaProfile?.selected_school || 'KidsG Partner School',
+        createdAt: supaProfile?.created_at || new Date().toISOString(),
+        updatedAt: supaProfile?.updated_at || new Date().toISOString(),
+      };
+      db.updateProfile(profile.id, profile as any);
 
       sendSuccess(res, {
         verified: true,
-        token: supaAuth.session?.access_token || `kidsg-jwt-${supaAuth.user.id}`,
+        token: supaAuth.session?.access_token || `kidsg-jwt-${profile.id}`,
         user: profile,
         profile,
       }, 'Login successful');
       return;
     }
-  } catch {
-    // Supabase auth error
+  } catch (err: any) {
+    console.warn('[KidsG][Supabase] signInWithPassword error:', err?.message);
   }
 
   sendError(res, 'Invalid email or password. Please verify your credentials.', 'INVALID_CREDENTIALS', 401);
@@ -204,15 +208,24 @@ router.post('/auth/signup', rateLimit(15, 60000, 'auth_signup'), async (req: Req
     } else if (authErr) {
       console.warn('[KidsG][Supabase] createUser note:', authErr.message);
       try {
-        const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
         const existingAuth = listData?.users?.find(u => u.email === emailClean);
         if (existingAuth) {
           authUserId = existingAuth.id;
+          await supabaseAdmin.auth.admin.updateUserById(existingAuth.id, {
+            password,
+            email_confirm: true,
+            user_metadata: {
+              first_name: firstName,
+              last_name: lastName,
+              role: 'CUSTOMER',
+            }
+          });
         }
       } catch (_e) {}
     }
 
-    const { error: insertErr } = await supabaseAdmin.from('profiles').upsert({
+    const { data: upsertedProf, error: insertErr } = await supabaseAdmin.from('profiles').upsert({
       ...(authUserId ? { auth_user_id: authUserId } : {}),
       first_name: firstName,
       last_name: lastName,
@@ -223,10 +236,13 @@ router.post('/auth/signup', rateLimit(15, 60000, 'auth_signup'), async (req: Req
       selected_class: selectedClass || null,
       selected_school: selectedSchool || null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'email' });
+    }, { onConflict: 'email' }).select('id').maybeSingle();
 
     if (insertErr) {
       console.error('[KidsG][Supabase] Profile upsert error:', insertErr);
+    } else if (upsertedProf?.id) {
+      profile.id = upsertedProf.id;
+      db.updateProfile(upsertedProf.id, profile);
     }
   } catch (err: any) {
     console.warn('[KidsG][Supabase] User sync notice:', err?.message);
@@ -325,20 +341,62 @@ router.post('/auth/verify-otp', rateLimit(20, 60000, 'auth_verify_otp'), async (
     return;
   }
 
-  // Check if account already exists
   const emailClean = (email || '').trim().toLowerCase();
-  const existing = emailClean ? db.checkEmailExists(emailClean) : null;
 
-  if (existing?.exists && existing.user) {
-    const token = `kidsg-jwt-${existing.user.id}`;
+  // 1. Authoritative check in local DB
+  const localExisting = emailClean ? db.checkEmailExists(emailClean) : null;
+  if (localExisting?.exists && localExisting.user) {
+    const token = `kidsg-jwt-${localExisting.user.id}`;
     sendSuccess(res, {
       verified: true,
       isNewUser: false,
       token,
-      user: existing.user,
-      profile: existing.user,
+      user: localExisting.user,
+      profile: localExisting.user,
     }, 'OTP verified successfully');
     return;
+  }
+
+  // 2. Authoritative check against Supabase profiles table
+  if (emailClean) {
+    try {
+      const { data: supaProf } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('email', emailClean)
+        .maybeSingle();
+
+      if (supaProf?.id) {
+        const userObj = {
+          id: supaProf.id,
+          authUserId: supaProf.auth_user_id || supaProf.id,
+          email: supaProf.email,
+          firstName: supaProf.first_name || 'Student',
+          lastName: supaProf.last_name || '',
+          phone: supaProf.phone || phone || '',
+          role: supaProf.role || 'CUSTOMER',
+          onboardingCompleted: supaProf.onboarding_completed ?? true,
+          selectedClass: supaProf.selected_class || 'Class 1',
+          selectedSchool: supaProf.selected_school || 'KidsG Partner School',
+          createdAt: supaProf.created_at || new Date().toISOString(),
+          updatedAt: supaProf.updated_at || new Date().toISOString(),
+        };
+
+        db.updateProfile(supaProf.id, userObj as any);
+
+        const token = `kidsg-jwt-${supaProf.id}`;
+        sendSuccess(res, {
+          verified: true,
+          isNewUser: false,
+          token,
+          user: userObj,
+          profile: userObj,
+        }, 'OTP verified successfully');
+        return;
+      }
+    } catch (e: any) {
+      console.warn('[KidsG][Supabase] Profile lookup during verify-otp notice:', e?.message);
+    }
   }
 
   // New user verified code
@@ -363,15 +421,44 @@ router.post('/auth/refresh', requireAuth(), (req: Request, res: Response) => {
 });
 
 // GET /api/auth/me
-router.get('/auth/me', requireAuth(), (req: Request, res: Response) => {
+router.get('/auth/me', requireAuth(), async (req: Request, res: Response) => {
   const user = req.user!;
-  const profile = db.getProfile(user.id);
-  const addresses = db.getAddresses(user.id);
+  let profile = db.getProfile(user.id);
+
+  if (!profile) {
+    try {
+      const { data: supaProf } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .or(`id.eq.${user.id},email.eq.${user.email}`)
+        .maybeSingle();
+
+      if (supaProf?.id) {
+        profile = {
+          id: supaProf.id,
+          authUserId: supaProf.auth_user_id || supaProf.id,
+          email: supaProf.email,
+          firstName: supaProf.first_name || 'Student',
+          lastName: supaProf.last_name || '',
+          phone: supaProf.phone || '',
+          role: supaProf.role || 'CUSTOMER',
+          onboardingCompleted: supaProf.onboarding_completed ?? true,
+          selectedClass: supaProf.selected_class || 'Class 1',
+          selectedSchool: supaProf.selected_school || 'KidsG Partner School',
+          createdAt: supaProf.created_at || new Date().toISOString(),
+          updatedAt: supaProf.updated_at || new Date().toISOString(),
+        };
+        db.updateProfile(user.id, profile as any);
+      }
+    } catch (_e) {}
+  }
 
   if (!profile) {
     sendError(res, 'User profile not found', 'PROFILE_NOT_FOUND', 404);
     return;
   }
+
+  const addresses = db.getAddresses(user.id);
 
   sendSuccess(res, {
     user: {

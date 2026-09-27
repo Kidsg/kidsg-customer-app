@@ -285,28 +285,374 @@ export async function syncOrderToSupabase(userEmail: string, order: Order, clien
       });
     }
 
-    // 6. Save to `payments` table
-    await supabaseAdmin.from('payments').insert({
+    // 6. Save to `payments` table (Strict schema match: user_id, order_id, provider, amount, currency, status)
+    const { error: payErr } = await supabaseAdmin.from('payments').insert({
       order_id: orderDbId,
+      user_id: profileId,
+      provider: order.paymentMethod?.toLowerCase() || 'mock',
+      transaction_id: `txn_${randomUUID().substring(0, 10)}`,
+      gateway_order_id: `gpay_${randomUUID().substring(0, 8)}`,
       amount: order.total,
       currency: 'INR',
-      method: order.paymentMethod,
-      status: order.paymentStatus,
-      transaction_id: `txn_${randomUUID().substring(0, 10)}`,
-      gateway: 'MOCK',
+      status: order.paymentStatus || 'SUCCESS',
+      payment_metadata: { method: order.paymentMethod, simulated: true },
     });
+    if (payErr) {
+      console.error('[KidsG][Supabase] Payments insert notice:', payErr.message);
+    }
 
-    // 7. Save to `delivery_tracking` table
-    await supabaseAdmin.from('delivery_tracking').insert({
+    // 7. Save to `delivery_tracking` table (Strict schema match: order_id, rider_name, rider_phone, current_lat, current_lng, status_history)
+    const { error: trackErr } = await supabaseAdmin.from('delivery_tracking').insert({
       order_id: orderDbId,
-      status: order.deliveryStatus || 'CONFIRMED',
-      current_location_lat: 12.9352,
-      current_location_lng: 77.6245,
+      rider_name: 'KidsG Express Partner',
+      rider_phone: '+919876543210',
+      current_lat: 12.9352,
+      current_lng: 77.6245,
       estimated_delivery_time: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      status_history: [
+        {
+          status: order.deliveryStatus || 'CONFIRMED',
+          timestamp: new Date().toISOString(),
+          message: 'Order placed & scheduled for store preparation'
+        }
+      ],
     });
+    if (trackErr) {
+      console.error('[KidsG][Supabase] Delivery tracking insert notice:', trackErr.message);
+    }
 
-    console.log(`[KidsG][Supabase] Successfully synced order ${order.orderNumber} to Supabase!`);
+    console.log(`[KidsG][Supabase] Successfully synced order ${order.orderNumber} to Supabase (orders, order_items, payments, tracking)!`);
   } catch (err: any) {
-    console.error('[KidsG][Supabase] syncOrderToSupabase unexpected error:', err?.message);
+    console.error('[KidsG][Supabase] syncOrderToSupabase error:', err?.message);
+  }
+}
+
+/**
+ * Fetch orders for a user directly from Supabase, ensuring cross-instance persistence.
+ */
+export async function fetchUserOrdersFromSupabase(userEmail: string): Promise<Order[]> {
+  const isConfigured = env.SUPABASE_URL.startsWith('http') && !env.SUPABASE_URL.includes('mock.supabase.co');
+  if (!isConfigured) return [];
+
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', userEmail)
+      .maybeSingle();
+
+    if (!profile?.id) return [];
+
+    const { data: supaOrders, error } = await supabaseAdmin
+      .from('orders')
+      .select(`
+        *,
+        order_items (*)
+      `)
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false });
+
+    if (error || !supaOrders) return [];
+
+    return supaOrders.map((o: any) => ({
+      id: o.id,
+      orderNumber: o.order_number,
+      userId: o.user_id,
+      storeId: o.store_id,
+      items: (o.order_items || []).map((oi: any) => ({
+        id: oi.id,
+        productId: oi.product_id,
+        quantity: oi.quantity,
+        priceSnapshot: Number(oi.price_snapshot),
+        mrpSnapshot: Number(oi.mrp_snapshot),
+        selectedVariant: oi.variant_snapshot || undefined,
+        product: {
+          id: oi.product_id,
+          name: oi.product_name_snapshot,
+          slug: `prod_${oi.product_id.substring(0, 8)}`,
+          description: '',
+          price: Number(oi.price_snapshot),
+          mrp: Number(oi.mrp_snapshot),
+          discountPercent: 10,
+          imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500',
+          categoryId: 'c0000000-0000-0000-0000-000000000001',
+          stock: 50,
+          isActive: true,
+          brand: 'KidsG Partner',
+          unit: 'piece',
+          tags: [],
+          specs: {},
+          createdAt: o.created_at,
+          updatedAt: o.updated_at,
+        },
+      })),
+      subtotal: Number(o.subtotal),
+      discount: Number(o.discount),
+      couponDiscount: Number(o.coupon_discount),
+      deliveryFee: Number(o.delivery_fee),
+      tax: Number(o.tax),
+      total: Number(o.total),
+      status: o.status,
+      paymentStatus: o.payment_status,
+      paymentMethod: o.payment_method,
+      deliveryStatus: o.delivery_status,
+      addressSnapshot: o.address_snapshot,
+      storeSnapshot: {
+        id: o.store_id,
+        name: 'Vidya Book & Stationery Depot',
+        address: 'No. 42, 12th Main Road, Bengaluru',
+        phone: '+91 80 2553 1234',
+      },
+      createdAt: o.created_at,
+      updatedAt: o.updated_at,
+    }));
+  } catch (err: any) {
+    console.warn('[KidsG][Supabase] fetchUserOrdersFromSupabase notice:', err?.message);
+    return [];
+  }
+}
+
+/**
+ * Fetch all orders for Shop Owner directly from Supabase
+ */
+export async function fetchShopOrdersFromSupabase(storeId?: string, statusFilter?: string): Promise<Order[]> {
+  const isConfigured = env.SUPABASE_URL.startsWith('http') && !env.SUPABASE_URL.includes('mock.supabase.co');
+  if (!isConfigured) return [];
+
+  try {
+    let query = supabaseAdmin
+      .from('orders')
+      .select(`
+        *,
+        order_items (*),
+        profiles (first_name, last_name, email, phone)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (storeId) {
+      query = query.eq('store_id', storeId);
+    }
+    if (statusFilter && statusFilter !== 'ALL') {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data: supaOrders, error } = await query;
+    if (error || !supaOrders) return [];
+
+    return supaOrders.map((o: any) => ({
+      id: o.id,
+      orderNumber: o.order_number,
+      userId: o.user_id,
+      storeId: o.store_id,
+      items: (o.order_items || []).map((oi: any) => ({
+        id: oi.id,
+        productId: oi.product_id,
+        quantity: oi.quantity,
+        priceSnapshot: Number(oi.price_snapshot),
+        mrpSnapshot: Number(oi.mrp_snapshot),
+        selectedVariant: oi.variant_snapshot || undefined,
+        product: {
+          id: oi.product_id,
+          name: oi.product_name_snapshot,
+          slug: `prod_${oi.product_id.substring(0, 8)}`,
+          description: '',
+          price: Number(oi.price_snapshot),
+          mrp: Number(oi.mrp_snapshot),
+          discountPercent: 10,
+          imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500',
+          categoryId: 'c0000000-0000-0000-0000-000000000001',
+          stock: 50,
+          isActive: true,
+          brand: 'KidsG Partner',
+          unit: 'piece',
+          tags: [],
+          specs: {},
+          createdAt: o.created_at,
+          updatedAt: o.updated_at,
+        },
+      })),
+      subtotal: Number(o.subtotal),
+      discount: Number(o.discount),
+      couponDiscount: Number(o.coupon_discount),
+      deliveryFee: Number(o.delivery_fee),
+      tax: Number(o.tax),
+      total: Number(o.total),
+      status: o.status,
+      paymentStatus: o.payment_status,
+      paymentMethod: o.payment_method,
+      deliveryStatus: o.delivery_status,
+      addressSnapshot: o.address_snapshot,
+      storeSnapshot: {
+        id: o.store_id,
+        name: 'Vidya Book & Stationery Depot',
+        address: 'No. 42, 12th Main Road, Bengaluru',
+        phone: '+91 80 2553 1234',
+      },
+      createdAt: o.created_at,
+      updatedAt: o.updated_at,
+    }));
+  } catch (err: any) {
+    console.warn('[KidsG][Supabase] fetchShopOrdersFromSupabase notice:', err?.message);
+    return [];
+  }
+}
+
+/**
+ * Update order status synchronously in Supabase
+ */
+export async function updateSupabaseOrderStatus(orderId: string, status: string, deliveryStatus?: string) {
+  const isConfigured = env.SUPABASE_URL.startsWith('http') && !env.SUPABASE_URL.includes('mock.supabase.co');
+  if (!isConfigured) return;
+
+  try {
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    if (deliveryStatus) {
+      updateData.delivery_status = deliveryStatus;
+    }
+
+    await supabaseAdmin
+      .from('orders')
+      .update(updateData)
+      .or(`id.eq.${orderId},order_number.eq.${orderId}`);
+
+    // Update tracking status history
+    const { data: order } = await supabaseAdmin
+      .from('orders')
+      .select('id')
+      .or(`id.eq.${orderId},order_number.eq.${orderId}`)
+      .maybeSingle();
+
+    if (order?.id) {
+      const { data: track } = await supabaseAdmin
+        .from('delivery_tracking')
+        .select('*')
+        .eq('order_id', order.id)
+        .maybeSingle();
+
+      const existingHistory = track?.status_history || [];
+      const updatedHistory = [
+        ...existingHistory,
+        {
+          status,
+          timestamp: new Date().toISOString(),
+          message: `Order transitioned to ${status} by shop partner`,
+        }
+      ];
+
+      await supabaseAdmin
+        .from('delivery_tracking')
+        .upsert({
+          order_id: order.id,
+          rider_name: track?.rider_name || 'KidsG Express Partner',
+          rider_phone: track?.rider_phone || '+919876543210',
+          current_lat: 12.9352,
+          current_lng: 77.6245,
+          status_history: updatedHistory,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'order_id' });
+    }
+  } catch (err: any) {
+    console.warn('[KidsG][Supabase] updateSupabaseOrderStatus error:', err?.message);
+  }
+}
+
+/**
+ * Complete Database Reset:
+ * Wipes all transactional data (orders, items, payments, tracking, addresses, profiles, auth users)
+ * Re-seeds catalog (categories, products, stores, coupons)
+ */
+export async function resetSupabaseDatabase(): Promise<{
+  success: boolean;
+  message: string;
+  cleared: Record<string, number | string>;
+  catalog: { categories: number; products: number; stores: number; coupons: number };
+}> {
+  const isConfigured = env.SUPABASE_URL.startsWith('http') && !env.SUPABASE_URL.includes('mock.supabase.co');
+  if (!isConfigured) {
+    return {
+      success: false,
+      message: 'Supabase is not configured',
+      cleared: {},
+      catalog: { categories: 0, products: 0, stores: 0, coupons: 0 },
+    };
+  }
+
+  const clearedCounts: Record<string, number | string> = {};
+
+  try {
+    // 1. Delete in foreign-key dependency order
+    const tablesToClear = [
+      'delivery_tracking',
+      'payments',
+      'order_items',
+      'orders',
+      'addresses',
+      'cart_items',
+      'carts',
+      'wishlist_items',
+      'wishlists',
+      'notifications',
+      'coupon_redemptions',
+      'support_tickets',
+      'profiles',
+    ];
+
+    for (const table of tablesToClear) {
+      const { count, error } = await supabaseAdmin
+        .from(table)
+        .delete({ count: 'exact' })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) {
+        console.warn(`[KidsG][Reset] Notice on table ${table}:`, error.message);
+        clearedCounts[table] = `error: ${error.message}`;
+      } else {
+        clearedCounts[table] = count ?? 0;
+      }
+    }
+
+    // 2. Clear Auth users
+    try {
+      const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      let deletedUsers = 0;
+      if (authUsers?.users) {
+        for (const u of authUsers.users) {
+          await supabaseAdmin.auth.admin.deleteUser(u.id);
+          deletedUsers++;
+        }
+      }
+      clearedCounts['auth_users'] = deletedUsers;
+    } catch (authErr: any) {
+      clearedCounts['auth_users'] = `auth cleanup notice: ${authErr?.message}`;
+    }
+
+    // 3. Clear local in-memory transactions
+    db.clearTransactionalData();
+
+    // 4. Fresh re-seed catalog
+    const seedResult = await seedSupabaseCatalog();
+
+    return {
+      success: true,
+      message: 'Database completely cleared and catalog re-seeded successfully',
+      cleared: clearedCounts,
+      catalog: {
+        categories: seedResult.categoriesCount,
+        products: seedResult.productsCount,
+        stores: seedResult.storesCount,
+        coupons: seedResult.couponsCount,
+      },
+    };
+  } catch (err: any) {
+    console.error('[KidsG][Supabase] Database reset error:', err);
+    return {
+      success: false,
+      message: err?.message || 'Database reset failed',
+      cleared: clearedCounts,
+      catalog: { categories: 0, products: 0, stores: 0, coupons: 0 },
+    };
   }
 }

@@ -71,12 +71,22 @@ fun KidsGApp(
     }
     var showLocationDialog by remember { mutableStateOf(false) }
 
+    val cart by cartRepository.cartState.collectAsState()
+    val currentUser by authRepository.currentUser.collectAsState()
+    val activeOrders by orderRepository.observeActiveOrders().collectAsState(initial = emptyList())
+
     fun navigateTo(screen: Screen) {
         screenStack.add(currentScreen)
         currentScreen = screen
     }
 
     fun navigateBack(): Boolean {
+        // Drop any Auth or StudentSetup screen from stack if user is authenticated
+        if (currentUser != null) {
+            while (screenStack.isNotEmpty() && (screenStack.last() is Screen.Auth || screenStack.last() is Screen.StudentSetup)) {
+                screenStack.removeAt(screenStack.lastIndex)
+            }
+        }
         if (screenStack.isNotEmpty()) {
             currentScreen = screenStack.removeAt(screenStack.lastIndex)
             return true
@@ -92,10 +102,6 @@ fun KidsGApp(
     BackHandler(enabled = screenStack.isNotEmpty() || (currentScreen != Screen.Home && currentScreen != Screen.Splash && currentScreen != Screen.Onboarding)) {
         navigateBack()
     }
-
-    val cart by cartRepository.cartState.collectAsState()
-    val currentUser by authRepository.currentUser.collectAsState()
-    val activeOrders by orderRepository.observeActiveOrders().collectAsState(initial = emptyList())
 
     var selectedDeliveryAddress by remember {
         mutableStateOf(SessionStorage.getSelectedAddress())
@@ -200,10 +206,15 @@ fun KidsGApp(
                         AuthScreen(
                             authRepository = authRepository,
                             onAuthSuccess = { profile, isReturningUser ->
-                                if (isReturningUser && profile.studentName.isNotBlank()) {
-                                    currentScreen = Screen.Home
+                                val hasDetails = profile.studentName.isNotBlank() &&
+                                        profile.schoolName.isNotBlank() &&
+                                        profile.schoolName != "KidsG Partner School"
+                                if (isReturningUser || hasDetails) {
+                                    screenStack.clear()
                                     currentTab = KidsGNavTab.HOME
+                                    currentScreen = Screen.Home
                                 } else {
+                                    screenStack.removeAll { it is Screen.Auth }
                                     navigateTo(Screen.StudentSetup)
                                 }
                             },
@@ -218,8 +229,9 @@ fun KidsGApp(
                             authRepository = authRepository,
                             initialProfile = currentUser,
                             onSetupComplete = {
-                                currentScreen = Screen.Home
+                                screenStack.clear()
                                 currentTab = KidsGNavTab.HOME
+                                currentScreen = Screen.Home
                             }
                         )
                     }

@@ -23,7 +23,7 @@ router.get('/profile', requireAuth(), (req: Request, res: Response) => {
 });
 
 // PATCH /api/profile
-router.patch('/profile', requireAuth(), (req: Request, res: Response) => {
+router.patch('/profile', requireAuth(), async (req: Request, res: Response) => {
   const result = updateProfileSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
@@ -36,7 +36,7 @@ router.patch('/profile', requireAuth(), (req: Request, res: Response) => {
   try {
     const userEmail = updated.email || req.user?.email;
     if (userEmail) {
-      supabaseAdmin.from('profiles').upsert({
+      await supabaseAdmin.from('profiles').upsert({
         email: userEmail,
         first_name: updated.firstName || 'Student',
         last_name: updated.lastName || '',
@@ -44,7 +44,7 @@ router.patch('/profile', requireAuth(), (req: Request, res: Response) => {
         selected_class: updated.selectedClass,
         selected_school: updated.selectedSchool,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'email' }).catch(e => console.warn('[KidsG][Supabase] Profile sync warning:', e?.message));
+      }, { onConflict: 'email' });
     }
   } catch (e: any) {
     console.warn('[KidsG][Supabase] Profile sync warning:', e?.message);

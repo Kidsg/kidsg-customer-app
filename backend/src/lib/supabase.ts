@@ -9,7 +9,7 @@ const isConfigured = env.SUPABASE_URL.startsWith('http') && !env.SUPABASE_URL.in
 
 if (isConfigured) {
   const secretKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-  const publishableKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY;
+  const publishableKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || secretKey;
 
   supabaseClient = createClient(env.SUPABASE_URL, secretKey, {
     auth: {

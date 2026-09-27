@@ -7,20 +7,39 @@ import { getNotificationService } from '../services/notification/NotificationSer
 const router = Router();
 const notificationService = getNotificationService();
 
+import { fetchShopOrdersFromSupabase, updateSupabaseOrderStatus } from '../lib/supabaseSync.js';
+
 // GET /api/shop/orders - View all shop orders
-router.get('/shop/orders', (req: Request, res: Response) => {
+router.get('/shop/orders', async (req: Request, res: Response) => {
   const storeId = req.query.storeId as string | undefined;
   const statusFilter = req.query.status as string | undefined;
 
-  const orders = db.getShopOrders(storeId, statusFilter);
-  sendSuccess(res, orders);
+  const supaOrders = await fetchShopOrdersFromSupabase(storeId, statusFilter);
+  if (supaOrders.length > 0) {
+    sendSuccess(res, supaOrders);
+    return;
+  }
+
+  const localOrders = db.getShopOrders(storeId, statusFilter);
+  sendSuccess(res, localOrders);
 });
 
 // GET /api/shop/orders/:id - View single shop order detail with items snapshot
-router.get('/shop/orders/:id', (req: Request, res: Response) => {
+router.get('/shop/orders/:id', async (req: Request, res: Response) => {
   const orderId = String(req.params.id);
-  const order = db.getOrderByIdAdmin(orderId);
+  const supaOrders = await fetchShopOrdersFromSupabase();
+  const supaOrder = supaOrders.find(o => o.id === orderId || o.orderNumber === orderId);
 
+  if (supaOrder) {
+    const history = db.getOrderStatusHistory(orderId);
+    sendSuccess(res, {
+      order: supaOrder,
+      statusHistory: history,
+    });
+    return;
+  }
+
+  const order = db.getOrderByIdAdmin(orderId);
   if (!order) {
     sendError(res, 'Order not found', 'ORDER_NOT_FOUND', 404);
     return;
@@ -37,6 +56,9 @@ router.get('/shop/orders/:id', (req: Request, res: Response) => {
 router.post('/shop/orders/:id/accept', async (req: Request, res: Response) => {
   const orderId = String(req.params.id);
   const result = db.shopAcceptOrder(orderId);
+
+  // Synchronously update Supabase
+  await updateSupabaseOrderStatus(orderId, 'PREPARING');
 
   if (!result.success || !result.order) {
     sendError(res, result.error || 'Failed to accept order', 'ACCEPT_FAILED', 400);
@@ -61,6 +83,8 @@ router.post('/shop/orders/:id/reject', async (req: Request, res: Response) => {
   const reason = req.body.reason as string | undefined;
   const result = db.shopRejectOrder(orderId, undefined, reason);
 
+  await updateSupabaseOrderStatus(orderId, 'CANCELLED');
+
   if (!result.success || !result.order) {
     sendError(res, result.error || 'Failed to reject order', 'REJECT_FAILED', 400);
     return;
@@ -83,6 +107,8 @@ router.post('/shop/orders/:id/packing', async (req: Request, res: Response) => {
   const orderId = String(req.params.id);
   const result = db.shopStartPacking(orderId);
 
+  await updateSupabaseOrderStatus(orderId, 'PREPARING');
+
   if (!result.success || !result.order) {
     sendError(res, result.error || 'Failed to update packing status', 'UPDATE_FAILED', 400);
     return;
@@ -104,6 +130,8 @@ router.post('/shop/orders/:id/packing', async (req: Request, res: Response) => {
 router.post('/shop/orders/:id/ready', async (req: Request, res: Response) => {
   const orderId = String(req.params.id);
   const result = db.shopReadyForPickup(orderId);
+
+  await updateSupabaseOrderStatus(orderId, 'READY_FOR_PICKUP');
 
   if (!result.success || !result.order) {
     sendError(res, result.error || 'Failed to update status', 'UPDATE_FAILED', 400);
@@ -137,6 +165,8 @@ router.post('/delivery/orders/:id/advance', async (req: Request, res: Response) 
   const orderId = String(req.params.id);
   const targetStatus = parseResult.data.status;
   const result = db.advanceDeliveryStatus(orderId, targetStatus);
+
+  await updateSupabaseOrderStatus(orderId, targetStatus, targetStatus);
 
   if (!result.success || !result.order) {
     sendError(res, result.error || 'Failed to advance delivery', 'DELIVERY_UPDATE_FAILED', 400);

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { env } from '../config/env.js';
 import { supabaseAdmin } from '../lib/supabase.js';
-import { seedSupabaseCatalog } from '../lib/supabaseSync.js';
+import { seedSupabaseCatalog, resetSupabaseDatabase } from '../lib/supabaseSync.js';
 
 const router = Router();
 
@@ -13,15 +13,21 @@ router.get('/health', async (req, res) => {
   let categoriesCount: number | null = null;
   let productsCount: number | null = null;
   let ordersCount: number | null = null;
+  let paymentsCount: number | null = null;
+  let trackingCount: number | null = null;
+  let addressesCount: number | null = null;
   let seededNow: boolean = false;
 
   if (isSupaConfigured) {
     try {
-      const [profRes, catRes, prodRes, ordRes] = await Promise.all([
+      const [profRes, catRes, prodRes, ordRes, payRes, trackRes, addrRes] = await Promise.all([
         supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
         supabaseAdmin.from('categories').select('*', { count: 'exact', head: true }),
         supabaseAdmin.from('products').select('*', { count: 'exact', head: true }),
         supabaseAdmin.from('orders').select('*', { count: 'exact', head: true }),
+        supabaseAdmin.from('payments').select('*', { count: 'exact', head: true }),
+        supabaseAdmin.from('delivery_tracking').select('*', { count: 'exact', head: true }),
+        supabaseAdmin.from('addresses').select('*', { count: 'exact', head: true }),
       ]);
 
       if (profRes.error) {
@@ -33,6 +39,9 @@ router.get('/health', async (req, res) => {
         categoriesCount = catRes.count ?? 0;
         productsCount = prodRes.count ?? 0;
         ordersCount = ordRes.count ?? 0;
+        paymentsCount = payRes.count ?? 0;
+        trackingCount = trackRes.count ?? 0;
+        addressesCount = addrRes.count ?? 0;
 
         // Auto-seed catalog if categories table is currently empty or ?seed=true requested
         if (categoriesCount === 0 || req.query.seed === 'true') {
@@ -66,6 +75,9 @@ router.get('/health', async (req, res) => {
         categories: categoriesCount,
         products: productsCount,
         orders: ordersCount,
+        payments: paymentsCount,
+        delivery_tracking: trackingCount,
+        addresses: addressesCount,
       },
       seededNow,
     }
@@ -75,6 +87,12 @@ router.get('/health', async (req, res) => {
 // Explicit Admin Seed Endpoint
 router.post('/admin/seed', async (_req, res) => {
   const result = await seedSupabaseCatalog();
+  res.json(result);
+});
+
+// Admin Reset Database Endpoint (Completely clears transactional tables and re-seeds catalog)
+router.all('/admin/reset-db', async (_req, res) => {
+  const result = await resetSupabaseDatabase();
   res.json(result);
 });
 

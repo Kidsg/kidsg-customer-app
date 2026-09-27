@@ -6,7 +6,7 @@ import { getDeliveryTrackingService } from '../services/delivery/DeliveryTrackin
 import { getNotificationService } from '../services/notification/NotificationService.js';
 import { db } from '../lib/db.js';
 import { supabaseAdmin } from '../lib/supabase.js';
-import { syncOrderToSupabase } from '../lib/supabaseSync.js';
+import { syncOrderToSupabase, fetchUserOrdersFromSupabase, updateSupabaseOrderStatus } from '../lib/supabaseSync.js';
 
 const router = Router();
 const deliveryTrackingService = getDeliveryTrackingService();
@@ -54,9 +54,12 @@ router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
   const order = orderRes.order;
 
   const userEmail = req.user?.email || 'student@kidsg.in';
-  syncOrderToSupabase(userEmail, order, deliveryAddress).catch(e => {
+  // Synchronously await Supabase write to guarantee instant DB visibility
+  try {
+    await syncOrderToSupabase(userEmail, order, deliveryAddress);
+  } catch (e: any) {
     console.warn('[KidsG][Supabase] Order sync warning:', e?.message);
-  });
+  }
 
   // Send notification to customer
   await notificationService.send(
@@ -80,14 +83,36 @@ router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
 });
 
 // GET /api/orders
-router.get('/orders', requireAuth(), (req: Request, res: Response) => {
-  const orders = db.getOrders(req.user!.id);
-  sendSuccess(res, orders);
+router.get('/orders', requireAuth(), async (req: Request, res: Response) => {
+  const userEmail = req.user?.email || '';
+  const supaOrders = userEmail ? await fetchUserOrdersFromSupabase(userEmail) : [];
+  
+  if (supaOrders.length > 0) {
+    sendSuccess(res, supaOrders);
+    return;
+  }
+
+  const localOrders = db.getOrders(req.user!.id);
+  sendSuccess(res, localOrders);
 });
 
 // GET /api/orders/:id
-router.get('/orders/:id', requireAuth(), (req: Request, res: Response) => {
-  const order = db.getOrderById(String(req.params.id), req.user!.id);
+router.get('/orders/:id', requireAuth(), async (req: Request, res: Response) => {
+  const orderId = String(req.params.id);
+  const userEmail = req.user?.email || '';
+  const supaOrders = userEmail ? await fetchUserOrdersFromSupabase(userEmail) : [];
+  const supaOrder = supaOrders.find(o => o.id === orderId || o.orderNumber === orderId);
+
+  if (supaOrder) {
+    const statusHistory = db.getOrderStatusHistory(supaOrder.id);
+    sendSuccess(res, {
+      ...supaOrder,
+      statusHistory,
+    });
+    return;
+  }
+
+  const order = db.getOrderById(orderId, req.user!.id);
   if (!order) {
     sendError(res, 'Order not found', 'ORDER_NOT_FOUND', 404);
     return;
@@ -107,6 +132,8 @@ router.post('/orders/:id/cancel', requireAuth(), async (req: Request, res: Respo
     sendError(res, cancelRes.error || 'Could not cancel order', 'CANCEL_FAILED', 400);
     return;
   }
+
+  await updateSupabaseOrderStatus(orderId, 'CANCELLED');
 
   await notificationService.send(
     req.user!.id,

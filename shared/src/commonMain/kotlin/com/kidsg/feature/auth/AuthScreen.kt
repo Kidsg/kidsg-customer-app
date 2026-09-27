@@ -854,7 +854,7 @@ fun AuthScreen(
                             )
                             isLoading = false
                             res.onSuccess { profile ->
-                                onAuthSuccess(profile, false)
+                                onAuthSuccess(profile, true)
                             }.onFailure { err ->
                                 errorMessage = err.message ?: "Failed to create account. Please try again."
                             }

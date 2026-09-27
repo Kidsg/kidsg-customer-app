@@ -1666,6 +1666,16 @@ export class KidsGDatabase {
   getSupportTicketById(id: string, userId: string): SupportTicket | undefined {
     return this.tickets.find(t => (t.id === id || t.ticketNumber === id) && t.userId === userId);
   }
+
+  clearTransactionalData(): void {
+    this.orders.clear();
+    this.orderStatusHistories.clear();
+    this.payments.clear();
+    this.carts.clear();
+    this.wishlists.clear();
+    this.tickets = [];
+    this.addresses.clear();
+  }
 }
 
 export const db = new KidsGDatabase();

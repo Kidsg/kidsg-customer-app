@@ -50,7 +50,7 @@ router.post('/checkout/preview', requireAuth(), (req: Request, res: Response) =>
 import { syncOrderToSupabase } from '../lib/supabaseSync.js';
 
 // POST /api/checkout/create
-router.post('/checkout/create', requireAuth(), (req: Request, res: Response) => {
+router.post('/checkout/create', requireAuth(), async (req: Request, res: Response) => {
   const result = checkoutCreateSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
@@ -74,9 +74,12 @@ router.post('/checkout/create', requireAuth(), (req: Request, res: Response) => 
   }
 
   const userEmail = req.user?.email || 'student@kidsg.in';
-  syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress).catch(e => {
-    console.warn('[KidsG][Supabase] Async checkout sync notice:', e?.message);
-  });
+  // Synchronously await Supabase write to guarantee instant DB visibility
+  try {
+    await syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress);
+  } catch (e: any) {
+    console.warn('[KidsG][Supabase] Checkout sync notice:', e?.message);
+  }
 
   sendSuccess(res, {
     orderId: orderRes.order.id,

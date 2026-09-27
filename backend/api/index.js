@@ -138,7 +138,7 @@ var supabaseAuthClient;
 var isConfigured = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
 if (isConfigured) {
   const secretKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-  const publishableKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY;
+  const publishableKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || secretKey;
   supabaseClient = createClient(env.SUPABASE_URL, secretKey, {
     auth: {
       autoRefreshToken: false,
@@ -185,7 +185,6 @@ if (isConfigured) {
   supabaseAuthClient = supabaseClient;
 }
 var supabaseAdmin = supabaseClient;
-var supabaseAuth = supabaseAuthClient;
 
 // src/lib/supabaseSync.ts
 import { randomUUID as randomUUID2 } from "crypto";
@@ -1520,6 +1519,15 @@ var KidsGDatabase = class {
   getSupportTicketById(id, userId) {
     return this.tickets.find((t) => (t.id === id || t.ticketNumber === id) && t.userId === userId);
   }
+  clearTransactionalData() {
+    this.orders.clear();
+    this.orderStatusHistories.clear();
+    this.payments.clear();
+    this.carts.clear();
+    this.wishlists.clear();
+    this.tickets = [];
+    this.addresses.clear();
+  }
 };
 var db = new KidsGDatabase();
 
@@ -1753,25 +1761,293 @@ async function syncOrderToSupabase(userEmail, order, clientAddress) {
         variant_snapshot: item.selectedVariant || null
       });
     }
-    await supabaseAdmin.from("payments").insert({
+    const { error: payErr } = await supabaseAdmin.from("payments").insert({
       order_id: orderDbId,
+      user_id: profileId,
+      provider: order.paymentMethod?.toLowerCase() || "mock",
+      transaction_id: `txn_${randomUUID2().substring(0, 10)}`,
+      gateway_order_id: `gpay_${randomUUID2().substring(0, 8)}`,
       amount: order.total,
       currency: "INR",
-      method: order.paymentMethod,
-      status: order.paymentStatus,
-      transaction_id: `txn_${randomUUID2().substring(0, 10)}`,
-      gateway: "MOCK"
+      status: order.paymentStatus || "SUCCESS",
+      payment_metadata: { method: order.paymentMethod, simulated: true }
     });
-    await supabaseAdmin.from("delivery_tracking").insert({
+    if (payErr) {
+      console.error("[KidsG][Supabase] Payments insert notice:", payErr.message);
+    }
+    const { error: trackErr } = await supabaseAdmin.from("delivery_tracking").insert({
       order_id: orderDbId,
-      status: order.deliveryStatus || "CONFIRMED",
-      current_location_lat: 12.9352,
-      current_location_lng: 77.6245,
-      estimated_delivery_time: new Date(Date.now() + 15 * 60 * 1e3).toISOString()
+      rider_name: "KidsG Express Partner",
+      rider_phone: "+919876543210",
+      current_lat: 12.9352,
+      current_lng: 77.6245,
+      estimated_delivery_time: new Date(Date.now() + 15 * 60 * 1e3).toISOString(),
+      status_history: [
+        {
+          status: order.deliveryStatus || "CONFIRMED",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          message: "Order placed & scheduled for store preparation"
+        }
+      ]
     });
-    console.log(`[KidsG][Supabase] Successfully synced order ${order.orderNumber} to Supabase!`);
+    if (trackErr) {
+      console.error("[KidsG][Supabase] Delivery tracking insert notice:", trackErr.message);
+    }
+    console.log(`[KidsG][Supabase] Successfully synced order ${order.orderNumber} to Supabase (orders, order_items, payments, tracking)!`);
   } catch (err) {
-    console.error("[KidsG][Supabase] syncOrderToSupabase unexpected error:", err?.message);
+    console.error("[KidsG][Supabase] syncOrderToSupabase error:", err?.message);
+  }
+}
+async function fetchUserOrdersFromSupabase(userEmail) {
+  const isConfigured2 = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  if (!isConfigured2) return [];
+  try {
+    const { data: profile } = await supabaseAdmin.from("profiles").select("id").eq("email", userEmail).maybeSingle();
+    if (!profile?.id) return [];
+    const { data: supaOrders, error } = await supabaseAdmin.from("orders").select(`
+        *,
+        order_items (*)
+      `).eq("user_id", profile.id).order("created_at", { ascending: false });
+    if (error || !supaOrders) return [];
+    return supaOrders.map((o) => ({
+      id: o.id,
+      orderNumber: o.order_number,
+      userId: o.user_id,
+      storeId: o.store_id,
+      items: (o.order_items || []).map((oi) => ({
+        id: oi.id,
+        productId: oi.product_id,
+        quantity: oi.quantity,
+        priceSnapshot: Number(oi.price_snapshot),
+        mrpSnapshot: Number(oi.mrp_snapshot),
+        selectedVariant: oi.variant_snapshot || void 0,
+        product: {
+          id: oi.product_id,
+          name: oi.product_name_snapshot,
+          slug: `prod_${oi.product_id.substring(0, 8)}`,
+          description: "",
+          price: Number(oi.price_snapshot),
+          mrp: Number(oi.mrp_snapshot),
+          discountPercent: 10,
+          imageUrl: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500",
+          categoryId: "c0000000-0000-0000-0000-000000000001",
+          stock: 50,
+          isActive: true,
+          brand: "KidsG Partner",
+          unit: "piece",
+          tags: [],
+          specs: {},
+          createdAt: o.created_at,
+          updatedAt: o.updated_at
+        }
+      })),
+      subtotal: Number(o.subtotal),
+      discount: Number(o.discount),
+      couponDiscount: Number(o.coupon_discount),
+      deliveryFee: Number(o.delivery_fee),
+      tax: Number(o.tax),
+      total: Number(o.total),
+      status: o.status,
+      paymentStatus: o.payment_status,
+      paymentMethod: o.payment_method,
+      deliveryStatus: o.delivery_status,
+      addressSnapshot: o.address_snapshot,
+      storeSnapshot: {
+        id: o.store_id,
+        name: "Vidya Book & Stationery Depot",
+        address: "No. 42, 12th Main Road, Bengaluru",
+        phone: "+91 80 2553 1234"
+      },
+      createdAt: o.created_at,
+      updatedAt: o.updated_at
+    }));
+  } catch (err) {
+    console.warn("[KidsG][Supabase] fetchUserOrdersFromSupabase notice:", err?.message);
+    return [];
+  }
+}
+async function fetchShopOrdersFromSupabase(storeId, statusFilter) {
+  const isConfigured2 = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  if (!isConfigured2) return [];
+  try {
+    let query = supabaseAdmin.from("orders").select(`
+        *,
+        order_items (*),
+        profiles (first_name, last_name, email, phone)
+      `).order("created_at", { ascending: false });
+    if (storeId) {
+      query = query.eq("store_id", storeId);
+    }
+    if (statusFilter && statusFilter !== "ALL") {
+      query = query.eq("status", statusFilter);
+    }
+    const { data: supaOrders, error } = await query;
+    if (error || !supaOrders) return [];
+    return supaOrders.map((o) => ({
+      id: o.id,
+      orderNumber: o.order_number,
+      userId: o.user_id,
+      storeId: o.store_id,
+      items: (o.order_items || []).map((oi) => ({
+        id: oi.id,
+        productId: oi.product_id,
+        quantity: oi.quantity,
+        priceSnapshot: Number(oi.price_snapshot),
+        mrpSnapshot: Number(oi.mrp_snapshot),
+        selectedVariant: oi.variant_snapshot || void 0,
+        product: {
+          id: oi.product_id,
+          name: oi.product_name_snapshot,
+          slug: `prod_${oi.product_id.substring(0, 8)}`,
+          description: "",
+          price: Number(oi.price_snapshot),
+          mrp: Number(oi.mrp_snapshot),
+          discountPercent: 10,
+          imageUrl: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500",
+          categoryId: "c0000000-0000-0000-0000-000000000001",
+          stock: 50,
+          isActive: true,
+          brand: "KidsG Partner",
+          unit: "piece",
+          tags: [],
+          specs: {},
+          createdAt: o.created_at,
+          updatedAt: o.updated_at
+        }
+      })),
+      subtotal: Number(o.subtotal),
+      discount: Number(o.discount),
+      couponDiscount: Number(o.coupon_discount),
+      deliveryFee: Number(o.delivery_fee),
+      tax: Number(o.tax),
+      total: Number(o.total),
+      status: o.status,
+      paymentStatus: o.payment_status,
+      paymentMethod: o.payment_method,
+      deliveryStatus: o.delivery_status,
+      addressSnapshot: o.address_snapshot,
+      storeSnapshot: {
+        id: o.store_id,
+        name: "Vidya Book & Stationery Depot",
+        address: "No. 42, 12th Main Road, Bengaluru",
+        phone: "+91 80 2553 1234"
+      },
+      createdAt: o.created_at,
+      updatedAt: o.updated_at
+    }));
+  } catch (err) {
+    console.warn("[KidsG][Supabase] fetchShopOrdersFromSupabase notice:", err?.message);
+    return [];
+  }
+}
+async function updateSupabaseOrderStatus(orderId, status, deliveryStatus) {
+  const isConfigured2 = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  if (!isConfigured2) return;
+  try {
+    const updateData = {
+      status,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (deliveryStatus) {
+      updateData.delivery_status = deliveryStatus;
+    }
+    await supabaseAdmin.from("orders").update(updateData).or(`id.eq.${orderId},order_number.eq.${orderId}`);
+    const { data: order } = await supabaseAdmin.from("orders").select("id").or(`id.eq.${orderId},order_number.eq.${orderId}`).maybeSingle();
+    if (order?.id) {
+      const { data: track } = await supabaseAdmin.from("delivery_tracking").select("*").eq("order_id", order.id).maybeSingle();
+      const existingHistory = track?.status_history || [];
+      const updatedHistory = [
+        ...existingHistory,
+        {
+          status,
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          message: `Order transitioned to ${status} by shop partner`
+        }
+      ];
+      await supabaseAdmin.from("delivery_tracking").upsert({
+        order_id: order.id,
+        rider_name: track?.rider_name || "KidsG Express Partner",
+        rider_phone: track?.rider_phone || "+919876543210",
+        current_lat: 12.9352,
+        current_lng: 77.6245,
+        status_history: updatedHistory,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }, { onConflict: "order_id" });
+    }
+  } catch (err) {
+    console.warn("[KidsG][Supabase] updateSupabaseOrderStatus error:", err?.message);
+  }
+}
+async function resetSupabaseDatabase() {
+  const isConfigured2 = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  if (!isConfigured2) {
+    return {
+      success: false,
+      message: "Supabase is not configured",
+      cleared: {},
+      catalog: { categories: 0, products: 0, stores: 0, coupons: 0 }
+    };
+  }
+  const clearedCounts = {};
+  try {
+    const tablesToClear = [
+      "delivery_tracking",
+      "payments",
+      "order_items",
+      "orders",
+      "addresses",
+      "cart_items",
+      "carts",
+      "wishlist_items",
+      "wishlists",
+      "notifications",
+      "coupon_redemptions",
+      "support_tickets",
+      "profiles"
+    ];
+    for (const table of tablesToClear) {
+      const { count, error } = await supabaseAdmin.from(table).delete({ count: "exact" }).neq("id", "00000000-0000-0000-0000-000000000000");
+      if (error) {
+        console.warn(`[KidsG][Reset] Notice on table ${table}:`, error.message);
+        clearedCounts[table] = `error: ${error.message}`;
+      } else {
+        clearedCounts[table] = count ?? 0;
+      }
+    }
+    try {
+      const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1e3 });
+      let deletedUsers = 0;
+      if (authUsers?.users) {
+        for (const u of authUsers.users) {
+          await supabaseAdmin.auth.admin.deleteUser(u.id);
+          deletedUsers++;
+        }
+      }
+      clearedCounts["auth_users"] = deletedUsers;
+    } catch (authErr) {
+      clearedCounts["auth_users"] = `auth cleanup notice: ${authErr?.message}`;
+    }
+    db.clearTransactionalData();
+    const seedResult = await seedSupabaseCatalog();
+    return {
+      success: true,
+      message: "Database completely cleared and catalog re-seeded successfully",
+      cleared: clearedCounts,
+      catalog: {
+        categories: seedResult.categoriesCount,
+        products: seedResult.productsCount,
+        stores: seedResult.storesCount,
+        coupons: seedResult.couponsCount
+      }
+    };
+  } catch (err) {
+    console.error("[KidsG][Supabase] Database reset error:", err);
+    return {
+      success: false,
+      message: err?.message || "Database reset failed",
+      cleared: clearedCounts,
+      catalog: { categories: 0, products: 0, stores: 0, coupons: 0 }
+    };
   }
 }
 
@@ -1785,14 +2061,20 @@ router.get("/health", async (req, res) => {
   let categoriesCount = null;
   let productsCount = null;
   let ordersCount = null;
+  let paymentsCount = null;
+  let trackingCount = null;
+  let addressesCount = null;
   let seededNow = false;
   if (isSupaConfigured) {
     try {
-      const [profRes, catRes, prodRes, ordRes] = await Promise.all([
+      const [profRes, catRes, prodRes, ordRes, payRes, trackRes, addrRes] = await Promise.all([
         supabaseAdmin.from("profiles").select("*", { count: "exact", head: true }),
         supabaseAdmin.from("categories").select("*", { count: "exact", head: true }),
         supabaseAdmin.from("products").select("*", { count: "exact", head: true }),
-        supabaseAdmin.from("orders").select("*", { count: "exact", head: true })
+        supabaseAdmin.from("orders").select("*", { count: "exact", head: true }),
+        supabaseAdmin.from("payments").select("*", { count: "exact", head: true }),
+        supabaseAdmin.from("delivery_tracking").select("*", { count: "exact", head: true }),
+        supabaseAdmin.from("addresses").select("*", { count: "exact", head: true })
       ]);
       if (profRes.error) {
         supaStatus = "error";
@@ -1803,6 +2085,9 @@ router.get("/health", async (req, res) => {
         categoriesCount = catRes.count ?? 0;
         productsCount = prodRes.count ?? 0;
         ordersCount = ordRes.count ?? 0;
+        paymentsCount = payRes.count ?? 0;
+        trackingCount = trackRes.count ?? 0;
+        addressesCount = addrRes.count ?? 0;
         if (categoriesCount === 0 || req.query.seed === "true") {
           const seedResult = await seedSupabaseCatalog();
           if (seedResult.success) {
@@ -1832,7 +2117,10 @@ router.get("/health", async (req, res) => {
         profiles: profilesCount,
         categories: categoriesCount,
         products: productsCount,
-        orders: ordersCount
+        orders: ordersCount,
+        payments: paymentsCount,
+        delivery_tracking: trackingCount,
+        addresses: addressesCount
       },
       seededNow
     }
@@ -1840,6 +2128,10 @@ router.get("/health", async (req, res) => {
 });
 router.post("/admin/seed", async (_req, res) => {
   const result = await seedSupabaseCatalog();
+  res.json(result);
+});
+router.all("/admin/reset-db", async (_req, res) => {
+  const result = await resetSupabaseDatabase();
   res.json(result);
 });
 var health_default = router;
@@ -2336,38 +2628,37 @@ router2.post("/auth/login-password", rateLimit(15, 6e4, "auth_login_password"), 
     return;
   }
   try {
-    const { data: supaAuth, error: supaErr } = await supabaseAuth.auth.signInWithPassword({
+    const { data: supaAuth, error: supaErr } = await supabaseAdmin.auth.signInWithPassword({
       email: emailClean,
       password
     });
     if (!supaErr && supaAuth.user) {
-      let profile = db.getProfile(supaAuth.user.id);
-      if (!profile) {
-        profile = {
-          id: supaAuth.user.id,
-          authUserId: supaAuth.user.id,
-          email: emailClean,
-          firstName: supaAuth.user.user_metadata?.first_name || "Student",
-          lastName: supaAuth.user.user_metadata?.last_name || "",
-          phone: supaAuth.user.phone || "",
-          role: supaAuth.user.user_metadata?.role || "CUSTOMER",
-          onboardingCompleted: true,
-          selectedClass: "Class 7",
-          selectedSchool: "KidsG Partner School",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        db.updateProfile(supaAuth.user.id, profile);
-      }
+      const { data: supaProfile } = await supabaseAdmin.from("profiles").select("*").eq("email", emailClean).maybeSingle();
+      const profile = {
+        id: supaProfile?.id || supaAuth.user.id,
+        authUserId: supaAuth.user.id,
+        email: emailClean,
+        firstName: supaProfile?.first_name || supaAuth.user.user_metadata?.first_name || "Student",
+        lastName: supaProfile?.last_name || supaAuth.user.user_metadata?.last_name || "",
+        phone: supaProfile?.phone || supaAuth.user.phone || "",
+        role: supaProfile?.role || supaAuth.user.user_metadata?.role || "CUSTOMER",
+        onboardingCompleted: supaProfile?.onboarding_completed ?? true,
+        selectedClass: supaProfile?.selected_class || "Class 1",
+        selectedSchool: supaProfile?.selected_school || "KidsG Partner School",
+        createdAt: supaProfile?.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: supaProfile?.updated_at || (/* @__PURE__ */ new Date()).toISOString()
+      };
+      db.updateProfile(profile.id, profile);
       sendSuccess(res, {
         verified: true,
-        token: supaAuth.session?.access_token || `kidsg-jwt-${supaAuth.user.id}`,
+        token: supaAuth.session?.access_token || `kidsg-jwt-${profile.id}`,
         user: profile,
         profile
       }, "Login successful");
       return;
     }
-  } catch {
+  } catch (err) {
+    console.warn("[KidsG][Supabase] signInWithPassword error:", err?.message);
   }
   sendError(res, "Invalid email or password. Please verify your credentials.", "INVALID_CREDENTIALS", 401);
 });
@@ -2411,15 +2702,24 @@ router2.post("/auth/signup", rateLimit(15, 6e4, "auth_signup"), async (req, res)
     } else if (authErr) {
       console.warn("[KidsG][Supabase] createUser note:", authErr.message);
       try {
-        const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1e3 });
         const existingAuth = listData?.users?.find((u) => u.email === emailClean);
         if (existingAuth) {
           authUserId = existingAuth.id;
+          await supabaseAdmin.auth.admin.updateUserById(existingAuth.id, {
+            password,
+            email_confirm: true,
+            user_metadata: {
+              first_name: firstName,
+              last_name: lastName,
+              role: "CUSTOMER"
+            }
+          });
         }
       } catch (_e) {
       }
     }
-    const { error: insertErr } = await supabaseAdmin.from("profiles").upsert({
+    const { data: upsertedProf, error: insertErr } = await supabaseAdmin.from("profiles").upsert({
       ...authUserId ? { auth_user_id: authUserId } : {},
       first_name: firstName,
       last_name: lastName,
@@ -2430,9 +2730,12 @@ router2.post("/auth/signup", rateLimit(15, 6e4, "auth_signup"), async (req, res)
       selected_class: selectedClass || null,
       selected_school: selectedSchool || null,
       updated_at: (/* @__PURE__ */ new Date()).toISOString()
-    }, { onConflict: "email" });
+    }, { onConflict: "email" }).select("id").maybeSingle();
     if (insertErr) {
       console.error("[KidsG][Supabase] Profile upsert error:", insertErr);
+    } else if (upsertedProf?.id) {
+      profile.id = upsertedProf.id;
+      db.updateProfile(upsertedProf.id, profile);
     }
   } catch (err) {
     console.warn("[KidsG][Supabase] User sync notice:", err?.message);
@@ -2512,17 +2815,50 @@ router2.post("/auth/verify-otp", rateLimit(20, 6e4, "auth_verify_otp"), async (r
     return;
   }
   const emailClean = (email || "").trim().toLowerCase();
-  const existing = emailClean ? db.checkEmailExists(emailClean) : null;
-  if (existing?.exists && existing.user) {
-    const token = `kidsg-jwt-${existing.user.id}`;
+  const localExisting = emailClean ? db.checkEmailExists(emailClean) : null;
+  if (localExisting?.exists && localExisting.user) {
+    const token = `kidsg-jwt-${localExisting.user.id}`;
     sendSuccess(res, {
       verified: true,
       isNewUser: false,
       token,
-      user: existing.user,
-      profile: existing.user
+      user: localExisting.user,
+      profile: localExisting.user
     }, "OTP verified successfully");
     return;
+  }
+  if (emailClean) {
+    try {
+      const { data: supaProf } = await supabaseAdmin.from("profiles").select("*").eq("email", emailClean).maybeSingle();
+      if (supaProf?.id) {
+        const userObj = {
+          id: supaProf.id,
+          authUserId: supaProf.auth_user_id || supaProf.id,
+          email: supaProf.email,
+          firstName: supaProf.first_name || "Student",
+          lastName: supaProf.last_name || "",
+          phone: supaProf.phone || phone || "",
+          role: supaProf.role || "CUSTOMER",
+          onboardingCompleted: supaProf.onboarding_completed ?? true,
+          selectedClass: supaProf.selected_class || "Class 1",
+          selectedSchool: supaProf.selected_school || "KidsG Partner School",
+          createdAt: supaProf.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: supaProf.updated_at || (/* @__PURE__ */ new Date()).toISOString()
+        };
+        db.updateProfile(supaProf.id, userObj);
+        const token = `kidsg-jwt-${supaProf.id}`;
+        sendSuccess(res, {
+          verified: true,
+          isNewUser: false,
+          token,
+          user: userObj,
+          profile: userObj
+        }, "OTP verified successfully");
+        return;
+      }
+    } catch (e) {
+      console.warn("[KidsG][Supabase] Profile lookup during verify-otp notice:", e?.message);
+    }
   }
   sendSuccess(res, {
     verified: true,
@@ -2539,14 +2875,37 @@ router2.post("/auth/refresh", requireAuth(), (req, res) => {
   const newToken = `kidsg-jwt-${user.id}`;
   sendSuccess(res, { token: newToken });
 });
-router2.get("/auth/me", requireAuth(), (req, res) => {
+router2.get("/auth/me", requireAuth(), async (req, res) => {
   const user = req.user;
-  const profile = db.getProfile(user.id);
-  const addresses = db.getAddresses(user.id);
+  let profile = db.getProfile(user.id);
+  if (!profile) {
+    try {
+      const { data: supaProf } = await supabaseAdmin.from("profiles").select("*").or(`id.eq.${user.id},email.eq.${user.email}`).maybeSingle();
+      if (supaProf?.id) {
+        profile = {
+          id: supaProf.id,
+          authUserId: supaProf.auth_user_id || supaProf.id,
+          email: supaProf.email,
+          firstName: supaProf.first_name || "Student",
+          lastName: supaProf.last_name || "",
+          phone: supaProf.phone || "",
+          role: supaProf.role || "CUSTOMER",
+          onboardingCompleted: supaProf.onboarding_completed ?? true,
+          selectedClass: supaProf.selected_class || "Class 1",
+          selectedSchool: supaProf.selected_school || "KidsG Partner School",
+          createdAt: supaProf.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: supaProf.updated_at || (/* @__PURE__ */ new Date()).toISOString()
+        };
+        db.updateProfile(user.id, profile);
+      }
+    } catch (_e) {
+    }
+  }
   if (!profile) {
     sendError(res, "User profile not found", "PROFILE_NOT_FOUND", 404);
     return;
   }
+  const addresses = db.getAddresses(user.id);
   sendSuccess(res, {
     user: {
       id: user.id,
@@ -2586,7 +2945,7 @@ router3.get("/onboarding", requireAuth(), (req, res) => {
     selectedSchool: profile.selectedSchool || null
   });
 });
-router3.post("/onboarding/complete", requireAuth(), (req, res) => {
+router3.post("/onboarding/complete", requireAuth(), async (req, res) => {
   const result = onboardingCompleteSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
@@ -2602,7 +2961,7 @@ router3.post("/onboarding/complete", requireAuth(), (req, res) => {
     const userEmail = req.user?.email;
     if (userEmail) {
       const nameParts = (req.user?.name || "Student User").split(" ");
-      supabaseAdmin.from("profiles").upsert({
+      await supabaseAdmin.from("profiles").upsert({
         email: userEmail,
         first_name: nameParts[0] || "Student",
         last_name: nameParts.slice(1).join(" ") || "",
@@ -2610,7 +2969,7 @@ router3.post("/onboarding/complete", requireAuth(), (req, res) => {
         selected_class: selectedClass,
         selected_school: selectedSchool,
         updated_at: (/* @__PURE__ */ new Date()).toISOString()
-      }, { onConflict: "email" }).catch((e) => console.warn("[KidsG][Supabase] Profile sync notice:", e?.message));
+      }, { onConflict: "email" });
     }
   } catch (e) {
     console.warn("[KidsG][Supabase] Profile sync notice:", e?.message);
@@ -2663,7 +3022,7 @@ router4.get("/profile", requireAuth(), (req, res) => {
   const profile = db.getProfile(req.user.id);
   sendSuccess(res, profile);
 });
-router4.patch("/profile", requireAuth(), (req, res) => {
+router4.patch("/profile", requireAuth(), async (req, res) => {
   const result = updateProfileSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
@@ -2673,7 +3032,7 @@ router4.patch("/profile", requireAuth(), (req, res) => {
   try {
     const userEmail = updated.email || req.user?.email;
     if (userEmail) {
-      supabaseAdmin.from("profiles").upsert({
+      await supabaseAdmin.from("profiles").upsert({
         email: userEmail,
         first_name: updated.firstName || "Student",
         last_name: updated.lastName || "",
@@ -2681,7 +3040,7 @@ router4.patch("/profile", requireAuth(), (req, res) => {
         selected_class: updated.selectedClass,
         selected_school: updated.selectedSchool,
         updated_at: (/* @__PURE__ */ new Date()).toISOString()
-      }, { onConflict: "email" }).catch((e) => console.warn("[KidsG][Supabase] Profile sync warning:", e?.message));
+      }, { onConflict: "email" });
     }
   } catch (e) {
     console.warn("[KidsG][Supabase] Profile sync warning:", e?.message);
@@ -3060,7 +3419,7 @@ router11.post("/checkout/preview", requireAuth(), (req, res) => {
     amountNeededForFreeDelivery: Math.max(0, checkout.freeDeliveryThreshold - checkout.subtotal)
   });
 });
-router11.post("/checkout/create", requireAuth(), (req, res) => {
+router11.post("/checkout/create", requireAuth(), async (req, res) => {
   const result = checkoutCreateSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
@@ -3081,9 +3440,11 @@ router11.post("/checkout/create", requireAuth(), (req, res) => {
     return;
   }
   const userEmail = req.user?.email || "student@kidsg.in";
-  syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress).catch((e) => {
-    console.warn("[KidsG][Supabase] Async checkout sync notice:", e?.message);
-  });
+  try {
+    await syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress);
+  } catch (e) {
+    console.warn("[KidsG][Supabase] Checkout sync notice:", e?.message);
+  }
   sendSuccess(res, {
     orderId: orderRes.order.id,
     orderNumber: orderRes.order.orderNumber,
@@ -3522,9 +3883,11 @@ router13.post("/orders", requireAuth(), async (req, res) => {
   }
   const order = orderRes.order;
   const userEmail = req.user?.email || "student@kidsg.in";
-  syncOrderToSupabase(userEmail, order, deliveryAddress).catch((e) => {
+  try {
+    await syncOrderToSupabase(userEmail, order, deliveryAddress);
+  } catch (e) {
     console.warn("[KidsG][Supabase] Order sync warning:", e?.message);
-  });
+  }
   await notificationService2.send(
     req.user.id,
     "ORDER_CONFIRMED",
@@ -3541,12 +3904,30 @@ router13.post("/orders", requireAuth(), async (req, res) => {
   );
   sendSuccess(res, order, "Order placed successfully", 201);
 });
-router13.get("/orders", requireAuth(), (req, res) => {
-  const orders = db.getOrders(req.user.id);
-  sendSuccess(res, orders);
+router13.get("/orders", requireAuth(), async (req, res) => {
+  const userEmail = req.user?.email || "";
+  const supaOrders = userEmail ? await fetchUserOrdersFromSupabase(userEmail) : [];
+  if (supaOrders.length > 0) {
+    sendSuccess(res, supaOrders);
+    return;
+  }
+  const localOrders = db.getOrders(req.user.id);
+  sendSuccess(res, localOrders);
 });
-router13.get("/orders/:id", requireAuth(), (req, res) => {
-  const order = db.getOrderById(String(req.params.id), req.user.id);
+router13.get("/orders/:id", requireAuth(), async (req, res) => {
+  const orderId = String(req.params.id);
+  const userEmail = req.user?.email || "";
+  const supaOrders = userEmail ? await fetchUserOrdersFromSupabase(userEmail) : [];
+  const supaOrder = supaOrders.find((o) => o.id === orderId || o.orderNumber === orderId);
+  if (supaOrder) {
+    const statusHistory2 = db.getOrderStatusHistory(supaOrder.id);
+    sendSuccess(res, {
+      ...supaOrder,
+      statusHistory: statusHistory2
+    });
+    return;
+  }
+  const order = db.getOrderById(orderId, req.user.id);
   if (!order) {
     sendError(res, "Order not found", "ORDER_NOT_FOUND", 404);
     return;
@@ -3564,6 +3945,7 @@ router13.post("/orders/:id/cancel", requireAuth(), async (req, res) => {
     sendError(res, cancelRes.error || "Could not cancel order", "CANCEL_FAILED", 400);
     return;
   }
+  await updateSupabaseOrderStatus(orderId, "CANCELLED");
   await notificationService2.send(
     req.user.id,
     "ORDER_CANCELLED",
@@ -3643,14 +4025,29 @@ import { Router as Router15 } from "express";
 import { z as z12 } from "zod";
 var router15 = Router15();
 var notificationService4 = getNotificationService();
-router15.get("/shop/orders", (req, res) => {
+router15.get("/shop/orders", async (req, res) => {
   const storeId = req.query.storeId;
   const statusFilter = req.query.status;
-  const orders = db.getShopOrders(storeId, statusFilter);
-  sendSuccess(res, orders);
+  const supaOrders = await fetchShopOrdersFromSupabase(storeId, statusFilter);
+  if (supaOrders.length > 0) {
+    sendSuccess(res, supaOrders);
+    return;
+  }
+  const localOrders = db.getShopOrders(storeId, statusFilter);
+  sendSuccess(res, localOrders);
 });
-router15.get("/shop/orders/:id", (req, res) => {
+router15.get("/shop/orders/:id", async (req, res) => {
   const orderId = String(req.params.id);
+  const supaOrders = await fetchShopOrdersFromSupabase();
+  const supaOrder = supaOrders.find((o) => o.id === orderId || o.orderNumber === orderId);
+  if (supaOrder) {
+    const history2 = db.getOrderStatusHistory(orderId);
+    sendSuccess(res, {
+      order: supaOrder,
+      statusHistory: history2
+    });
+    return;
+  }
   const order = db.getOrderByIdAdmin(orderId);
   if (!order) {
     sendError(res, "Order not found", "ORDER_NOT_FOUND", 404);
@@ -3665,6 +4062,7 @@ router15.get("/shop/orders/:id", (req, res) => {
 router15.post("/shop/orders/:id/accept", async (req, res) => {
   const orderId = String(req.params.id);
   const result = db.shopAcceptOrder(orderId);
+  await updateSupabaseOrderStatus(orderId, "PREPARING");
   if (!result.success || !result.order) {
     sendError(res, result.error || "Failed to accept order", "ACCEPT_FAILED", 400);
     return;
@@ -3682,6 +4080,7 @@ router15.post("/shop/orders/:id/reject", async (req, res) => {
   const orderId = String(req.params.id);
   const reason = req.body.reason;
   const result = db.shopRejectOrder(orderId, void 0, reason);
+  await updateSupabaseOrderStatus(orderId, "CANCELLED");
   if (!result.success || !result.order) {
     sendError(res, result.error || "Failed to reject order", "REJECT_FAILED", 400);
     return;
@@ -3698,6 +4097,7 @@ router15.post("/shop/orders/:id/reject", async (req, res) => {
 router15.post("/shop/orders/:id/packing", async (req, res) => {
   const orderId = String(req.params.id);
   const result = db.shopStartPacking(orderId);
+  await updateSupabaseOrderStatus(orderId, "PREPARING");
   if (!result.success || !result.order) {
     sendError(res, result.error || "Failed to update packing status", "UPDATE_FAILED", 400);
     return;
@@ -3714,6 +4114,7 @@ router15.post("/shop/orders/:id/packing", async (req, res) => {
 router15.post("/shop/orders/:id/ready", async (req, res) => {
   const orderId = String(req.params.id);
   const result = db.shopReadyForPickup(orderId);
+  await updateSupabaseOrderStatus(orderId, "READY_FOR_PICKUP");
   if (!result.success || !result.order) {
     sendError(res, result.error || "Failed to update status", "UPDATE_FAILED", 400);
     return;
@@ -3739,6 +4140,7 @@ router15.post("/delivery/orders/:id/advance", async (req, res) => {
   const orderId = String(req.params.id);
   const targetStatus = parseResult.data.status;
   const result = db.advanceDeliveryStatus(orderId, targetStatus);
+  await updateSupabaseOrderStatus(orderId, targetStatus, targetStatus);
   if (!result.success || !result.order) {
     sendError(res, result.error || "Failed to advance delivery", "DELIVERY_UPDATE_FAILED", 400);
     return;
