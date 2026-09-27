@@ -1557,8 +1557,8 @@ async function seedSupabaseCatalog() {
     const stores = db.getStores();
     for (let i = 0; i < stores.length; i++) {
       const s = stores[i];
-      const uuid = `s0000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
-      await supabaseAdmin.from("stores").upsert({
+      const uuid = `a0000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
+      const { error: sErr } = await supabaseAdmin.from("stores").upsert({
         id: uuid,
         name: s.name,
         address: s.address,
@@ -1571,13 +1571,15 @@ async function seedSupabaseCatalog() {
         open_time: s.openTime || "07:30",
         close_time: s.closeTime || "21:30"
       }, { onConflict: "id" });
+      if (sErr) console.error("[KidsG][Supabase] Store upsert error:", sErr.message);
     }
     const { products } = db.getProducts({ limit: 100 });
+    let insertedProds = 0;
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
-      const prodUuid = `p0000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
+      const prodUuid = `b0000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
       const catUuid = categoryMapping[p.categoryId] || "c0000000-0000-0000-0000-000000000001";
-      await supabaseAdmin.from("products").upsert({
+      const { error: pErr } = await supabaseAdmin.from("products").upsert({
         id: prodUuid,
         name: p.name,
         slug: p.slug,
@@ -1595,11 +1597,16 @@ async function seedSupabaseCatalog() {
         is_active: p.isActive,
         specs: p.specs
       }, { onConflict: "slug" });
+      if (pErr) {
+        console.error(`[KidsG][Supabase] Product upsert error for ${p.slug}:`, pErr.message);
+      } else {
+        insertedProds++;
+      }
     }
     const coupons = db.getCoupons();
     for (let i = 0; i < coupons.length; i++) {
       const cp = coupons[i];
-      const cpUuid = `cp000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
+      const cpUuid = `d0000000-0000-0000-0000-${(i + 1).toString().padStart(12, "0")}`;
       await supabaseAdmin.from("coupons").upsert({
         id: cpUuid,
         code: cp.code,
@@ -1615,7 +1622,7 @@ async function seedSupabaseCatalog() {
     return {
       success: true,
       categoriesCount: categories.length,
-      productsCount: products.length,
+      productsCount: insertedProds,
       storesCount: stores.length,
       couponsCount: coupons.length
     };
@@ -1656,7 +1663,7 @@ async function syncOrderToSupabase(userEmail, order, clientAddress) {
       console.warn("[KidsG][Supabase] Profile lookup/creation failed during order sync");
       return;
     }
-    let storeId = "s0000000-0000-0000-0000-000000000001";
+    let storeId = "a0000000-0000-0000-0000-000000000001";
     const { data: storeData } = await supabaseAdmin.from("stores").select("id").limit(1).maybeSingle();
     if (storeData?.id) {
       storeId = storeData.id;
@@ -1712,7 +1719,7 @@ async function syncOrderToSupabase(userEmail, order, clientAddress) {
     const orderDbId = insertedOrder?.id;
     if (!orderDbId) return;
     for (const item of order.items) {
-      let prodDbId = "p0000000-0000-0000-0000-000000000001";
+      let prodDbId = "b0000000-0000-0000-0000-000000000001";
       const { data: prodData } = await supabaseAdmin.from("products").select("id").eq("slug", item.product?.slug || item.productId).maybeSingle();
       if (prodData?.id) {
         prodDbId = prodData.id;
