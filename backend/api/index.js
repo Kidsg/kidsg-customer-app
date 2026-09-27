@@ -15,12 +15,12 @@ var envSchema = z.object({
   PORT: z.coerce.number().default(3e3),
   API_BASE_URL: z.string().default("http://localhost:3000"),
   // Supabase
-  SUPABASE_URL: z.string().default("https://mock.supabase.co"),
-  SUPABASE_PUBLISHABLE_KEY: z.string().default(""),
-  SUPABASE_ANON_KEY: z.string().default(""),
-  SUPABASE_SECRET_KEY: z.string().default(""),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().default(""),
-  JWT_SECRET: z.string().default("kidsg_development_jwt_secret_must_be_changed_in_prod"),
+  SUPABASE_URL: z.string().default(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://mock.supabase.co"),
+  SUPABASE_PUBLISHABLE_KEY: z.string().default(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || ""),
+  SUPABASE_ANON_KEY: z.string().default(process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""),
+  SUPABASE_SECRET_KEY: z.string().default(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_JWT_SECRET || ""),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().default(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || ""),
+  JWT_SECRET: z.string().default(process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET || "kidsg_development_jwt_secret_must_be_changed_in_prod"),
   // Email & Providers (SMTP / Resend / Mock)
   EMAIL_PROVIDER: z.enum(["smtp", "resend", "mock"]).default("smtp"),
   SMTP_HOST: z.string().default("smtp.gmail.com"),
@@ -130,21 +130,6 @@ function sendError(res, message, errorCode = "INTERNAL_ERROR", statusCode = 400,
 
 // src/routes/health.ts
 import { Router } from "express";
-var router = Router();
-router.get("/health", (_req, res) => {
-  res.json({
-    success: true,
-    service: "kidsG-api",
-    status: "ok",
-    environment: env.NODE_ENV,
-    appEnv: env.APP_ENV
-  });
-});
-var health_default = router;
-
-// src/routes/auth.ts
-import { Router as Router2 } from "express";
-import { z as z2 } from "zod";
 
 // src/lib/supabase.ts
 import { createClient } from "@supabase/supabase-js";
@@ -201,6 +186,49 @@ if (isConfigured) {
 }
 var supabaseAdmin = supabaseClient;
 var supabaseAuth = supabaseAuthClient;
+
+// src/routes/health.ts
+var router = Router();
+router.get("/health", async (_req, res) => {
+  const isSupaConfigured = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+  let supaStatus = isSupaConfigured ? "connecting" : "mock_standalone";
+  let supaError = null;
+  let profilesCount = null;
+  if (isSupaConfigured) {
+    try {
+      const { count, error } = await supabaseAdmin.from("profiles").select("*", { count: "exact", head: true });
+      if (error) {
+        supaStatus = "error";
+        supaError = error.message;
+      } else {
+        supaStatus = "connected";
+        profilesCount = count ?? 0;
+      }
+    } catch (e) {
+      supaStatus = "error";
+      supaError = e?.message || "Unknown connection error";
+    }
+  }
+  res.json({
+    success: true,
+    service: "kidsG-api",
+    status: "ok",
+    environment: env.NODE_ENV,
+    appEnv: env.APP_ENV,
+    supabase: {
+      configured: isSupaConfigured,
+      url: env.SUPABASE_URL.replace(/https:\/\/(.{4}).*(\.supabase\.co)/, "https://$1...$2"),
+      status: supaStatus,
+      error: supaError,
+      profilesCount
+    }
+  });
+});
+var health_default = router;
+
+// src/routes/auth.ts
+import { Router as Router2 } from "express";
+import { z as z2 } from "zod";
 
 // src/lib/db.ts
 import { randomUUID, scryptSync, randomBytes } from "crypto";

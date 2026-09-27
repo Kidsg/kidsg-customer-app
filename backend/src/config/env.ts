@@ -13,12 +13,12 @@ const envSchema = z.object({
   API_BASE_URL: z.string().default('http://localhost:3000'),
 
   // Supabase
-  SUPABASE_URL: z.string().default('https://mock.supabase.co'),
-  SUPABASE_PUBLISHABLE_KEY: z.string().default(''),
-  SUPABASE_ANON_KEY: z.string().default(''),
-  SUPABASE_SECRET_KEY: z.string().default(''),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().default(''),
-  JWT_SECRET: z.string().default('kidsg_development_jwt_secret_must_be_changed_in_prod'),
+  SUPABASE_URL: z.string().default(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co'),
+  SUPABASE_PUBLISHABLE_KEY: z.string().default(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || ''),
+  SUPABASE_ANON_KEY: z.string().default(process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''),
+  SUPABASE_SECRET_KEY: z.string().default(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_JWT_SECRET || ''),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().default(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || ''),
+  JWT_SECRET: z.string().default(process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET || 'kidsg_development_jwt_secret_must_be_changed_in_prod'),
 
   // Email & Providers (SMTP / Resend / Mock)
   EMAIL_PROVIDER: z.enum(['smtp', 'resend', 'mock']).default('smtp'),
