@@ -1669,7 +1669,7 @@ export class KidsGDatabase {
 
   clearTransactionalData(): void {
     this.orders.clear();
-    this.orderStatusHistories.clear();
+    this.orderStatusHistory.clear();
     this.payments.clear();
     this.carts.clear();
     this.wishlists.clear();

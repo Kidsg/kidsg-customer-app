@@ -1521,7 +1521,7 @@ var KidsGDatabase = class {
   }
   clearTransactionalData() {
     this.orders.clear();
-    this.orderStatusHistories.clear();
+    this.orderStatusHistory.clear();
     this.payments.clear();
     this.carts.clear();
     this.wishlists.clear();
