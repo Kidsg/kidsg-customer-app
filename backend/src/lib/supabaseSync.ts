@@ -54,14 +54,14 @@ export async function seedSupabaseCatalog(): Promise<{
         id: uuid,
         name: s.name,
         address: s.address,
-        city: 'Bengaluru',
-        latitude: s.location.latitude,
-        longitude: s.location.longitude,
-        phone: s.phone,
-        delivery_radius_km: s.deliveryRadiusKm,
+        city: s.city || 'Bengaluru',
+        latitude: s.latitude || 12.9352,
+        longitude: s.longitude || 77.6245,
+        phone: s.phone || '+91 80 2553 1234',
+        delivery_radius_km: s.deliveryRadiusKm || 5.0,
         is_active: s.isActive,
-        open_time: s.operatingHours.open,
-        close_time: s.operatingHours.close,
+        open_time: s.openTime || '07:30',
+        close_time: s.closeTime || '21:30',
       }, { onConflict: 'id' });
     }
 
