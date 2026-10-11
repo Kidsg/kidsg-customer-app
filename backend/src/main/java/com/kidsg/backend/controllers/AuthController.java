@@ -4,17 +4,8 @@ import com.kidsg.backend.models.ERole;
 import com.kidsg.backend.models.RefreshToken;
 import com.kidsg.backend.models.Role;
 import com.kidsg.backend.models.User;
-import com.kidsg.backend.payload.request.ForgotPasswordRequest;
-import com.kidsg.backend.payload.request.LoginRequest;
-import com.kidsg.backend.payload.request.ProfileRegisterRequest;
-import com.kidsg.backend.payload.request.ResetPasswordRequest;
-import com.kidsg.backend.payload.request.SendOtpRequest;
-import com.kidsg.backend.payload.request.SignupRequest;
-import com.kidsg.backend.payload.request.TokenRefreshRequest;
-import com.kidsg.backend.payload.request.VerifyOtpRequest;
-import com.kidsg.backend.payload.response.JwtResponse;
-import com.kidsg.backend.payload.response.MessageResponse;
-import com.kidsg.backend.payload.response.TokenRefreshResponse;
+import com.kidsg.backend.payload.request.*;
+import com.kidsg.backend.payload.response.*;
 import com.kidsg.backend.repository.RoleRepository;
 import com.kidsg.backend.repository.UserRepository;
 import com.kidsg.backend.security.jwt.JwtUtils;
@@ -23,6 +14,7 @@ import com.kidsg.backend.security.services.RefreshTokenService;
 import com.kidsg.backend.security.services.UserDetailsImpl;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -31,9 +23,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
@@ -62,79 +52,205 @@ public class AuthController {
     @Autowired
     OtpService otpService;
 
+    // Helper to map User -> UserDto
+    private UserDto mapToUserDto(User user) {
+        String roleStr = user.getRoles().stream()
+                .findFirst()
+                .map(r -> r.getName().name().replace("ROLE_", ""))
+                .orElse("CUSTOMER");
+        return new UserDto(
+                String.valueOf(user.getId()),
+                user.getMobileNumber(),
+                user.getEmail(),
+                roleStr,
+                user.getFirstName(),
+                user.getLastName()
+        );
+    }
+
+    // Helper to map User -> ProfileDto
+    private ProfileDto mapToProfileDto(User user) {
+        String roleStr = user.getRoles().stream()
+                .findFirst()
+                .map(r -> r.getName().name().replace("ROLE_", ""))
+                .orElse("CUSTOMER");
+        return new ProfileDto(
+                String.valueOf(user.getId()),
+                String.valueOf(user.getId()),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getMobileNumber(),
+                user.getEmail(),
+                roleStr,
+                true,
+                user.getSelectedClass(),
+                user.getSelectedSchool(),
+                null
+        );
+    }
+
+    /**
+     * Mobile & Web: Check if email exists
+     */
+    @PostMapping("/check-email")
+    public ResponseEntity<ApiResponse<CheckEmailResponse>> checkEmail(@Valid @RequestBody CheckEmailRequest request) {
+        String email = request.getEmail().trim();
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            return ResponseEntity.ok(ApiResponse.success(new CheckEmailResponse(true, user.getFirstName()), "Email registered"));
+        } else {
+            return ResponseEntity.ok(ApiResponse.success(new CheckEmailResponse(false, null), "Email not registered"));
+        }
+    }
+
+    /**
+     * Mobile: Login with email and password
+     */
+    @PostMapping("/login-password")
+    public ResponseEntity<ApiResponse<VerifyOtpResponse>> loginPassword(@Valid @RequestBody LoginPasswordRequest request) {
+        try {
+            Authentication authentication = authenticationManager
+                    .authenticate(new UsernamePasswordAuthenticationToken(request.getEmail().trim(), request.getPassword()));
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            User user = userRepository.findByEmail(request.getEmail().trim())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            String jwt = jwtUtils.generateJwtToken(authentication);
+
+            UserDto userDto = mapToUserDto(user);
+            ProfileDto profileDto = mapToProfileDto(user);
+
+            VerifyOtpResponse responseData = new VerifyOtpResponse(true, jwt, userDto, profileDto, false);
+            return ResponseEntity.ok(ApiResponse.success(responseData, "Login successful"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Invalid email or password", "AUTH_INVALID_CREDENTIALS"));
+        }
+    }
+
+    /**
+     * Mobile & Web: Send OTP (supports email and phone)
+     * Dispatches OTP email via Gmail SMTP using Google App Password.
+     */
     @PostMapping("/send-otp")
-    public ResponseEntity<?> sendOtp(@Valid @RequestBody SendOtpRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: Email is already registered! Please login instead."));
+    public ResponseEntity<ApiResponse<SendOtpResponse>> sendOtp(@RequestBody SendOtpRequest request) {
+        String contact = request.getTargetContact();
+        if (contact == null || contact.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Email or phone number is required", "INVALID_CONTACT"));
         }
 
-        otpService.generateAndSendOtp(request.getEmail(), request.getMobileNumber());
-        return ResponseEntity.ok(new MessageResponse("OTP sent successfully to " + request.getEmail()));
+        String email = contact.contains("@") ? contact : null;
+        String phone = !contact.contains("@") ? contact : null;
+
+        otpService.generateAndSendOtp(email, phone);
+        return ResponseEntity.ok(ApiResponse.success(new SendOtpResponse(true, 300), "Verification code sent to " + contact));
     }
 
+    /**
+     * Mobile & Web: Verify OTP
+     */
     @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        boolean isValid = otpService.verifyOtp(request.getEmail(), request.getOtp());
-        if (!isValid) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: Invalid or expired OTP!"));
+    public ResponseEntity<ApiResponse<VerifyOtpResponse>> verifyOtp(@RequestBody VerifyOtpRequest request) {
+        String contact = request.getTargetContact();
+        if (contact == null || contact.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Contact is required", "INVALID_CONTACT"));
         }
 
-        return ResponseEntity.ok(new MessageResponse("OTP verified successfully! You may now proceed to profile registration."));
+        boolean isValid = otpService.verifyOtp(contact, request.getOtp());
+        if (!isValid) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP code", "INVALID_OTP"));
+        }
+
+        String email = contact.contains("@") ? contact : contact + "@kidsg.in";
+        Optional<User> userOpt = userRepository.findByEmail(email);
+
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            String jwt = jwtUtils.generateTokenFromUsername(user.getEmail());
+            UserDto userDto = mapToUserDto(user);
+            ProfileDto profileDto = mapToProfileDto(user);
+            return ResponseEntity.ok(ApiResponse.success(new VerifyOtpResponse(true, jwt, userDto, profileDto, false), "Verified successfully"));
+        } else {
+            // New user registration flow
+            User newUser = new User(email, encoder.encode(UUID.randomUUID().toString()));
+            newUser.setMobileNumber(!contact.contains("@") ? contact : "");
+            Role customerRole = roleRepository.findByName(ERole.ROLE_CUSTOMER)
+                    .orElseGet(() -> roleRepository.save(new Role(ERole.ROLE_CUSTOMER)));
+            Set<Role> roles = new HashSet<>();
+            roles.add(customerRole);
+            newUser.setRoles(roles);
+            userRepository.save(newUser);
+
+            String jwt = jwtUtils.generateTokenFromUsername(newUser.getEmail());
+            UserDto userDto = mapToUserDto(newUser);
+            ProfileDto profileDto = mapToProfileDto(newUser);
+            return ResponseEntity.ok(ApiResponse.success(new VerifyOtpResponse(true, jwt, userDto, profileDto, true), "Account verified successfully"));
+        }
     }
 
-    @PostMapping("/register-profile")
-    public ResponseEntity<?> registerProfile(@Valid @RequestBody ProfileRegisterRequest request) {
-        // 1. Validate that password and confirm password match
-        if (!request.getPassword().equals(request.getConfirmPassword())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: Password and Confirm Password do not match!"));
+    /**
+     * Mobile & Web: Signup endpoint
+     */
+    @PostMapping("/signup")
+    public ResponseEntity<ApiResponse<VerifyOtpResponse>> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
+        if (userRepository.existsByEmail(signUpRequest.getEmail().trim())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Email is already registered! Please login.", "EMAIL_ALREADY_EXISTS"));
         }
 
-        // 2. Check if email already registered
-        if (userRepository.existsByEmail(request.getEmail())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: Email is already registered!"));
-        }
+        User user = new User(signUpRequest.getEmail().trim(), encoder.encode(signUpRequest.getPassword()));
+        user.setFirstName(signUpRequest.getFirstName());
+        user.setLastName(signUpRequest.getLastName());
+        user.setMobileNumber(signUpRequest.getPhone());
+        user.setSelectedClass(signUpRequest.getSelectedClass());
+        user.setSelectedSchool(signUpRequest.getSelectedSchool());
+        user.setKidName(signUpRequest.getFirstName());
 
-        // 3. Ensure email has been verified via OTP
-        if (!otpService.isEmailVerified(request.getEmail())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: Email has not been verified with OTP. Please verify OTP first!"));
-        }
-
-        // 4. Create new user with profile fields
-        User user = new User(request.getEmail(), encoder.encode(request.getPassword()));
-        user.setKidName(request.getKidName());
-        user.setAge(request.getAge());
-        user.setGrade(request.getGrade());
-        user.setParentName(request.getParentName());
-        user.setMobileNumber(request.getMobileNumber());
-
-        Role userRole = roleRepository.findByName(ERole.ROLE_CUSTOMER)
-                .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+        Role customerRole = roleRepository.findByName(ERole.ROLE_CUSTOMER)
+                .orElseGet(() -> roleRepository.save(new Role(ERole.ROLE_CUSTOMER)));
         Set<Role> roles = new HashSet<>();
-        roles.add(userRole);
+        roles.add(customerRole);
         user.setRoles(roles);
 
         userRepository.save(user);
 
-        // Clear OTP after successful registration
-        otpService.clearOtpForEmail(request.getEmail());
-
-        // 5. Automatically log the user in and return JWT session
+        // Auto authenticate
         Authentication authentication = authenticationManager
-                .authenticate(new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+                .authenticate(new UsernamePasswordAuthenticationToken(signUpRequest.getEmail().trim(), signUpRequest.getPassword()));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-
-        List<String> roleNames = userDetails.getAuthorities().stream()
-                .map(item -> item.getAuthority())
-                .collect(Collectors.toList());
 
         String jwt = jwtUtils.generateJwtToken(authentication);
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getId());
+        UserDto userDto = mapToUserDto(user);
+        ProfileDto profileDto = mapToProfileDto(user);
 
-        return ResponseEntity.ok(new JwtResponse(jwt, refreshToken.getToken(), userDetails.getId(), userDetails.getEmail(), roleNames));
+        return ResponseEntity.ok(ApiResponse.success(new VerifyOtpResponse(true, jwt, userDto, profileDto, true), "User registered successfully!"));
     }
 
+    /**
+     * Mobile: Get current authenticated user profile
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<MeResponse>> getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserDetailsImpl userDetails)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Unauthorized", "UNAUTHORIZED"));
+        }
+
+        User user = userRepository.findByEmail(userDetails.getEmail())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        UserDto userDto = mapToUserDto(user);
+        ProfileDto profileDto = mapToProfileDto(user);
+
+        return ResponseEntity.ok(ApiResponse.success(new MeResponse(userDto, profileDto), "Profile retrieved successfully"));
+    }
+
+    /**
+     * Web session login endpoint
+     */
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         Authentication authentication = authenticationManager
@@ -149,52 +265,9 @@ public class AuthController {
                 .collect(Collectors.toList());
 
         String jwt = jwtUtils.generateJwtToken(authentication);
-
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getId());
 
-        return ResponseEntity.ok(new JwtResponse(jwt, refreshToken.getToken(), userDetails.getId(), userDetails.getEmail(), roles));
-    }
-
-    @PostMapping("/signup")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
-        if (userRepository.existsByEmail(signUpRequest.getEmail())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: Email is already in use!"));
-        }
-
-        User user = new User(signUpRequest.getEmail(), encoder.encode(signUpRequest.getPassword()));
-
-        Set<String> strRoles = signUpRequest.getRole();
-        Set<Role> roles = new HashSet<>();
-
-        if (strRoles == null) {
-            Role userRole = roleRepository.findByName(ERole.ROLE_CUSTOMER)
-                    .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-            roles.add(userRole);
-        } else {
-            strRoles.forEach(role -> {
-                switch (role.toLowerCase()) {
-                    case "admin":
-                        Role adminRole = roleRepository.findByName(ERole.ROLE_ADMIN)
-                                .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-                        roles.add(adminRole);
-                        break;
-                    case "mod":
-                        Role modRole = roleRepository.findByName(ERole.ROLE_MODERATOR)
-                                .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-                        roles.add(modRole);
-                        break;
-                    default:
-                        Role defaultRole = roleRepository.findByName(ERole.ROLE_CUSTOMER)
-                                .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-                        roles.add(defaultRole);
-                }
-            });
-        }
-
-        user.setRoles(roles);
-        userRepository.save(user);
-
-        return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
+        return ResponseEntity.ok(ApiResponse.success(new JwtResponse(jwt, refreshToken.getToken(), userDetails.getId(), userDetails.getEmail(), roles), "Login successful"));
     }
 
     @PostMapping("/refreshtoken")
@@ -206,7 +279,7 @@ public class AuthController {
                 .map(RefreshToken::getUser)
                 .map(user -> {
                     String token = jwtUtils.generateTokenFromUsername(user.getEmail());
-                    return ResponseEntity.ok(new TokenRefreshResponse(token, requestRefreshToken));
+                    return ResponseEntity.ok(ApiResponse.success(new TokenRefreshResponse(token, requestRefreshToken), "Token refreshed"));
                 })
                 .orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));
     }
@@ -216,45 +289,41 @@ public class AuthController {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof UserDetailsImpl userDetails) {
             refreshTokenService.deleteByUserId(userDetails.getId());
-            return ResponseEntity.ok(new MessageResponse("Log out successful!"));
+            return ResponseEntity.ok(ApiResponse.success(null, "Log out successful!"));
         }
-        return ResponseEntity.badRequest().body(new MessageResponse("Error: You must provide a valid Bearer token in the Authorization header to log out."));
+        return ResponseEntity.ok(ApiResponse.success(null, "Log out successful!"));
     }
 
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         if (!userRepository.existsByEmail(request.getEmail())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: No account found with email " + request.getEmail()));
+            return ResponseEntity.badRequest().body(ApiResponse.error("No account found with email " + request.getEmail(), "NOT_FOUND"));
         }
 
         otpService.generateAndSendOtp(request.getEmail(), null);
-        return ResponseEntity.ok(new MessageResponse("Password reset OTP sent successfully to " + request.getEmail()));
+        return ResponseEntity.ok(ApiResponse.success(null, "Password reset OTP sent successfully to " + request.getEmail()));
     }
 
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        // 1. Verify passwords match
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: New password and Confirm password do not match!"));
+            return ResponseEntity.badRequest().body(ApiResponse.error("New password and Confirm password do not match!", "MISMATCH"));
         }
 
-        // 2. Verify OTP
         boolean isValidOtp = otpService.verifyOtp(request.getEmail(), request.getOtp());
         if (!isValidOtp) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: Invalid or expired OTP!"));
+            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP!", "INVALID_OTP"));
         }
 
-        // 3. Find user and update password
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Error: User not found!"));
 
         user.setPassword(encoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        // 4. Invalidate sessions and clear OTP
         refreshTokenService.deleteByUserId(user.getId());
         otpService.clearOtpForEmail(request.getEmail());
 
-        return ResponseEntity.ok(new MessageResponse("Password has been reset successfully! You can now log in with your new password."));
+        return ResponseEntity.ok(ApiResponse.success(null, "Password has been reset successfully!"));
     }
 }

@@ -37,6 +37,18 @@ public class User {
     @Size(max = 20)
     private String mobileNumber;
 
+    @Size(max = 50)
+    private String firstName;
+
+    @Size(max = 50)
+    private String lastName;
+
+    @Size(max = 50)
+    private String selectedClass;
+
+    @Size(max = 100)
+    private String selectedSchool;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "user_roles",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -121,5 +133,37 @@ public class User {
 
     public void setRoles(java.util.Set<Role> roles) {
         this.roles = roles;
+    }
+
+    public String getFirstName() {
+        return firstName != null ? firstName : kidName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getSelectedClass() {
+        return selectedClass != null ? selectedClass : (grade != null ? grade : "Class 7");
+    }
+
+    public void setSelectedClass(String selectedClass) {
+        this.selectedClass = selectedClass;
+    }
+
+    public String getSelectedSchool() {
+        return selectedSchool != null ? selectedSchool : "KidsG Partner School";
+    }
+
+    public void setSelectedSchool(String selectedSchool) {
+        this.selectedSchool = selectedSchool;
     }
 }
