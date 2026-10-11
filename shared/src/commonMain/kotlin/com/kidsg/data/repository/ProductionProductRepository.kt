@@ -1,6 +1,7 @@
 package com.kidsg.data.repository
 
 import com.kidsg.core.network.ApiResult
+import com.kidsg.data.mock.KidsGCatalogue
 import com.kidsg.data.mock.KidsGMockData
 import com.kidsg.data.remote.api.ProductApi
 import com.kidsg.data.remote.mapper.toDomain
@@ -55,8 +56,16 @@ class ProductionProductRepository(
     override suspend fun getCategories(): List<Category> {
         return when (val result = productApi.getCategories()) {
             is ApiResult.Success -> result.data.map { it.toDomain() }
-            is ApiResult.Error -> KidsGMockData.categories
+            is ApiResult.Error -> KidsGCatalogue.categories
         }
+    }
+
+    override suspend fun getSubcategories(categoryId: String): List<Subcategory> {
+        return KidsGCatalogue.subcategories.filter { sub -> sub.categoryId == categoryId }
+    }
+
+    override suspend fun getProductsBySubcategory(categoryId: String, subcategoryId: String): List<Product> {
+        return KidsGCatalogue.products.filter { p -> p.subcategoryId == subcategoryId || (p.categoryId == categoryId && subcategoryId.isEmpty()) }
     }
 
     override suspend fun getIntentModes(): List<IntentModeInfo> {
@@ -65,5 +74,35 @@ class ProductionProductRepository(
 
     override suspend fun getOopsEmergencyItems(): List<OopsEmergencyItem> {
         return KidsGMockData.oopsItems
+    }
+
+    override suspend fun getProductReviews(productId: String): List<ProductReview> {
+        return KidsGCatalogue.getReviews(productId)
+    }
+
+    override suspend fun addProductReview(review: ProductReview): Boolean {
+        KidsGCatalogue.addReview(review)
+        return true
+    }
+
+    override suspend fun getProductQa(productId: String): List<ProductQa> {
+        return KidsGCatalogue.getQa(productId)
+    }
+
+    override suspend fun addProductQuestion(productId: String, question: String): Boolean {
+        KidsGCatalogue.addQuestion(productId, question)
+        return true
+    }
+
+    override suspend fun getFrequentlyBoughtTogether(productId: String): ProductBundle? {
+        return KidsGCatalogue.getFrequentlyBoughtTogether(productId)
+    }
+
+    override suspend fun getRelatedProducts(productId: String, type: String): List<Product> {
+        return KidsGCatalogue.getRelatedProducts(productId, type)
+    }
+
+    override suspend fun getPopularProductsForStudents(): List<Product> {
+        return KidsGCatalogue.getPopularForStudents()
     }
 }

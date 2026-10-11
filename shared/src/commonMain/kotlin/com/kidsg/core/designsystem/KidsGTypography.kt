@@ -106,4 +106,7 @@ object KidsGTypography {
         lineHeight = 12.sp,
         color = KidsGColors.OrangePrimary
     )
+
+    val LabelSmall = Caption
+    val LabelMedium = BodyMedium
 }

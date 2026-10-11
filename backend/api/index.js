@@ -193,7 +193,10 @@ import { randomUUID as randomUUID2 } from "crypto";
 import { randomUUID, scryptSync, randomBytes } from "crypto";
 var KidsGDatabase = class {
   categories = [];
+  subcategories = [];
   products = [];
+  reviews = /* @__PURE__ */ new Map();
+  qa = /* @__PURE__ */ new Map();
   stores = [];
   storeInventory = /* @__PURE__ */ new Map();
   // storeId_productId -> quantity
@@ -226,6 +229,23 @@ var KidsGDatabase = class {
       { id: "cat_sticky", name: "Sticky Notes & Flags", slug: "sticky-notes", iconName: "sticky", displayOrder: 8, isActive: true },
       { id: "cat_bags", name: "School Bags & Pouches", slug: "bags-pouches", iconName: "backpack", displayOrder: 9, isActive: true },
       { id: "cat_bottles", name: "Water Bottles & Lunch", slug: "bottles-lunch", iconName: "bottle", displayOrder: 10, isActive: true }
+    ];
+    this.subcategories = [
+      { id: "sub_notebooks_single", categoryId: "cat_notebooks", name: "Single Line Notebooks", slug: "notebooks-single", iconName: "notebook", itemCount: 22, displayOrder: 1, isActive: true },
+      { id: "sub_notebooks_four", categoryId: "cat_notebooks", name: "Four Line Notebooks", slug: "notebooks-four", iconName: "notebook", itemCount: 20, displayOrder: 2, isActive: true },
+      { id: "sub_notebooks_grid", categoryId: "cat_notebooks", name: "Square Grid Maths", slug: "notebooks-grid", iconName: "notebook", itemCount: 20, displayOrder: 3, isActive: true },
+      { id: "sub_notebooks_unruled", categoryId: "cat_notebooks", name: "Unruled Drawing & Rough", slug: "notebooks-unruled", iconName: "notebook", itemCount: 20, displayOrder: 4, isActive: true },
+      { id: "sub_pens_ball", categoryId: "cat_pens", name: "Ball Point Pens", slug: "pens-ball", iconName: "pen", itemCount: 21, displayOrder: 5, isActive: true },
+      { id: "sub_pens_gel", categoryId: "cat_pens", name: "Gel Pens", slug: "pens-gel", iconName: "pen", itemCount: 20, displayOrder: 6, isActive: true },
+      { id: "sub_pencils_graphite", categoryId: "cat_pencils", name: "Graphite Pencils", slug: "pencils-graphite", iconName: "pencil", itemCount: 21, displayOrder: 7, isActive: true },
+      { id: "sub_erasers", categoryId: "cat_pencils", name: "Dust-Free Erasers", slug: "erasers", iconName: "eraser", itemCount: 21, displayOrder: 8, isActive: true },
+      { id: "sub_sharpeners", categoryId: "cat_pencils", name: "Precision Sharpeners", slug: "sharpeners", iconName: "sharpener", itemCount: 21, displayOrder: 9, isActive: true },
+      { id: "sub_geometry_boxes", categoryId: "cat_geometry", name: "Geometry Box Sets", slug: "geometry-boxes", iconName: "ruler", itemCount: 21, displayOrder: 10, isActive: true },
+      { id: "sub_drawing_colours", categoryId: "cat_art", name: "Colouring & Drawing", slug: "drawing-colours", iconName: "palette", itemCount: 21, displayOrder: 11, isActive: true },
+      { id: "sub_crafts", categoryId: "cat_art", name: "Craft & Origami", slug: "crafts", iconName: "craft", itemCount: 21, displayOrder: 12, isActive: true },
+      { id: "sub_bags", categoryId: "cat_bags", name: "Ergonomic Backpacks", slug: "bags", iconName: "backpack", itemCount: 21, displayOrder: 13, isActive: true },
+      { id: "sub_bottles", categoryId: "cat_bottles", name: "Insulated Stainless Steel Bottles", slug: "bottles", iconName: "bottle", itemCount: 21, displayOrder: 14, isActive: true },
+      { id: "sub_lunch", categoryId: "cat_bottles", name: "Stainless Steel Lunch Boxes", slug: "lunch", iconName: "lunchbox", itemCount: 21, displayOrder: 15, isActive: true }
     ];
     this.products = [
       // Notebooks
@@ -891,6 +911,106 @@ var KidsGDatabase = class {
   getCategoryById(id) {
     return this.categories.find((c) => (c.id === id || c.slug === id) && c.isActive);
   }
+  // --- Subcategory Operations ---
+  getSubcategories(categoryId) {
+    if (categoryId) {
+      const cleanId = categoryId.replace("cat_", "");
+      return this.subcategories.filter((s) => (s.categoryId === categoryId || s.categoryId.replace("cat_", "") === cleanId) && s.isActive);
+    }
+    return this.subcategories.filter((s) => s.isActive).sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+  // --- Product Review & QA Operations ---
+  getProductReviews(productId) {
+    const list = this.reviews.get(productId) || [];
+    if (list.length === 0) {
+      return [
+        {
+          id: `rev_sample_1_${productId}`,
+          productId,
+          authorName: "Sneha Sharma",
+          authorRole: "Parent (Grade 6 CBSE)",
+          rating: 4.8,
+          dateText: "3 days ago",
+          comment: "Outstanding quality. Paper is completely ink-proof and binding is solid for daily school rough use.",
+          isVerifiedPurchase: true,
+          helpfulCount: 18
+        },
+        {
+          id: `rev_sample_2_${productId}`,
+          productId,
+          authorName: "Rohan Deshmukh",
+          authorRole: "Student (Grade 8)",
+          rating: 4.5,
+          dateText: "1 week ago",
+          comment: "Perfect for fast handwriting during examinations. Very smooth finish.",
+          isVerifiedPurchase: true,
+          helpfulCount: 9
+        }
+      ];
+    }
+    return list;
+  }
+  addProductReview(productId, review) {
+    const newReview = {
+      ...review,
+      id: `rev_${randomUUID()}`,
+      productId
+    };
+    const current = this.reviews.get(productId) || [];
+    current.unshift(newReview);
+    this.reviews.set(productId, current);
+    return newReview;
+  }
+  getProductQa(productId) {
+    const list = this.qa.get(productId) || [];
+    if (list.length === 0) {
+      return [
+        {
+          id: `qa_sample_1_${productId}`,
+          productId,
+          question: "Is this product compliant with CBSE & ICSE school syllabus?",
+          answer: "Yes! Strictly certified per school standards and recommended by top teachers.",
+          answeredBy: "KidsG School Expert",
+          answeredDateText: "Verified response"
+        },
+        {
+          id: `qa_sample_2_${productId}`,
+          productId,
+          question: "Can this be delivered in 15 minutes?",
+          answer: "Yes, dispatched directly from our nearest neighborhood partner dark store.",
+          answeredBy: "KidsG Logistics",
+          answeredDateText: "Verified response"
+        }
+      ];
+    }
+    return list;
+  }
+  addProductQa(productId, question) {
+    const newQa = {
+      id: `qa_${randomUUID()}`,
+      productId,
+      question,
+      answer: "Thank you for asking! Our verified stationery curator will review and post an answer shortly.",
+      answeredBy: "KidsG Support",
+      answeredDateText: "Just now"
+    };
+    const current = this.qa.get(productId) || [];
+    current.unshift(newQa);
+    this.qa.set(productId, current);
+    return newQa;
+  }
+  getProductBundle(productId) {
+    const baseProduct = this.getProductById(productId);
+    if (!baseProduct) return null;
+    const complements = this.products.filter((p) => p.id !== productId && p.isActive).slice(0, 2);
+    return {
+      id: `bundle_${productId}`,
+      productId,
+      title: "Frequently Bought Together Pack",
+      discountPercent: 10,
+      items: [baseProduct, ...complements]
+    };
+  }
   // --- Product Operations ---
   getProducts(params) {
     let result = this.products.filter((p) => p.isActive);
@@ -903,6 +1023,9 @@ var KidsGDatabase = class {
     if (params?.categoryId) {
       const catId = params.categoryId.toLowerCase();
       result = result.filter((p) => p.categoryId === params.categoryId || p.categoryName?.toLowerCase() === catId);
+    }
+    if (params?.subcategoryId) {
+      result = result.filter((p) => p.subcategoryId === params.subcategoryId);
     }
     if (params?.brand) {
       result = result.filter((p) => p.brand.toLowerCase() === params.brand?.toLowerCase());
@@ -3155,6 +3278,14 @@ router6.get("/categories/:id", (req, res) => {
   }
   sendSuccess(res, category);
 });
+router6.get("/categories/:id/subcategories", (req, res) => {
+  const subcategories = db.getSubcategories(String(req.params.id));
+  sendSuccess(res, subcategories);
+});
+router6.get("/subcategories", (_req, res) => {
+  const subcategories = db.getSubcategories();
+  sendSuccess(res, subcategories);
+});
 var category_default = router6;
 
 // src/routes/product.ts
@@ -3177,6 +3308,7 @@ router7.get("/products", (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   const search = req.query.search || req.query.q;
   const categoryId = req.query.category;
+  const subcategoryId = req.query.subcategory;
   const brand = req.query.brand;
   const sort = req.query.sort;
   const result = db.getProducts({
@@ -3184,6 +3316,7 @@ router7.get("/products", (req, res) => {
     limit,
     search,
     categoryId,
+    subcategoryId,
     brand,
     sort
   });
@@ -3196,6 +3329,60 @@ router7.get("/products", (req, res) => {
       totalPages: Math.ceil(result.total / limit)
     }
   });
+});
+router7.get("/products/:id/reviews", (req, res) => {
+  const reviews = db.getProductReviews(String(req.params.id));
+  sendSuccess(res, reviews);
+});
+router7.post("/products/:id/reviews", (req, res) => {
+  const { authorName, authorRole, rating, comment } = req.body;
+  if (!comment) {
+    sendError(res, "Comment is required", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const review = db.addProductReview(String(req.params.id), {
+    productId: String(req.params.id),
+    authorName: authorName || "Student Reviewer",
+    authorRole: authorRole || "Student",
+    rating: Number(rating) || 5,
+    dateText: "Just now",
+    comment,
+    isVerifiedPurchase: true,
+    helpfulCount: 0
+  });
+  sendSuccess(res, review, "Review submitted successfully");
+});
+router7.get("/products/:id/qa", (req, res) => {
+  const qa = db.getProductQa(String(req.params.id));
+  sendSuccess(res, qa);
+});
+router7.post("/products/:id/qa", (req, res) => {
+  const { question } = req.body;
+  if (!question) {
+    sendError(res, "Question is required", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const newQa = db.addProductQa(String(req.params.id), question);
+  sendSuccess(res, newQa, "Question submitted successfully");
+});
+router7.get("/products/:id/bundle", (req, res) => {
+  const bundle = db.getProductBundle(String(req.params.id));
+  sendSuccess(res, bundle);
+});
+router7.get("/products/:id/related", (req, res) => {
+  const product = db.getProductById(String(req.params.id));
+  if (!product) {
+    sendError(res, "Product not found", "PRODUCT_NOT_FOUND", 404);
+    return;
+  }
+  const type = req.query.type || "similar";
+  let related = db.getProducts({ limit: 10 }).products.filter((p) => p.id !== product.id);
+  if (type === "brand") {
+    related = related.filter((p) => p.brand.toLowerCase() === product.brand.toLowerCase());
+  } else if (type === "category") {
+    related = related.filter((p) => p.categoryId === product.categoryId);
+  }
+  sendSuccess(res, related.slice(0, 8));
 });
 router7.get("/products/:id", (req, res) => {
   const product = db.getProductById(String(req.params.id));

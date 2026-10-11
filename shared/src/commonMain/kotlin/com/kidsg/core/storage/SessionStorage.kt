@@ -170,6 +170,63 @@ object SessionStorage {
         }
     }
 
+    private const val KEY_RECENTLY_VIEWED = "kidsg_recently_viewed_products"
+    private const val KEY_WISHLIST_IDS = "kidsg_wishlist_product_ids"
+
+    @kotlinx.serialization.Serializable
+    private data class StringListWrapper(
+        val items: List<String> = emptyList()
+    )
+
+    fun getRecentlyViewedProductIds(): List<String> {
+        val raw = platformGetString(KEY_RECENTLY_VIEWED) ?: return emptyList()
+        return try {
+            json.decodeFromString<StringListWrapper>(raw).items
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun addRecentlyViewedProductId(productId: String) {
+        val current = getRecentlyViewedProductIds().filterNot { it == productId }
+        val updated = listOf(productId) + current.take(19)
+        try {
+            val raw = json.encodeToString(StringListWrapper.serializer(), StringListWrapper(updated))
+            platformPutString(KEY_RECENTLY_VIEWED, raw)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun getWishlistProductIds(): Set<String> {
+        val raw = platformGetString(KEY_WISHLIST_IDS) ?: return emptySet()
+        return try {
+            json.decodeFromString<StringListWrapper>(raw).items.toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    fun toggleWishlistProductId(productId: String): Boolean {
+        val current = getWishlistProductIds().toMutableSet()
+        val isNowWishlisted = if (current.contains(productId)) {
+            current.remove(productId)
+            false
+        } else {
+            current.add(productId)
+            true
+        }
+        try {
+            val raw = json.encodeToString(StringListWrapper.serializer(), StringListWrapper(current.toList()))
+            platformPutString(KEY_WISHLIST_IDS, raw)
+        } catch (_: Exception) {
+        }
+        return isNowWishlisted
+    }
+
+    fun isProductWishlisted(productId: String): Boolean {
+        return getWishlistProductIds().contains(productId)
+    }
+
     fun clearSession() {
         platformRemove(KEY_AUTH_TOKEN)
         platformRemove(KEY_USER_PROFILE)

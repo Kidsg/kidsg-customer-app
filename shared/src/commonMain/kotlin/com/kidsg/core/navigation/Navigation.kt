@@ -10,6 +10,7 @@ sealed interface Screen {
     data object StudentSetup : Screen
     data object Home : Screen
     data class Discovery(val initialMode: IntentModeType? = null, val initialCategoryId: String? = null) : Screen
+    data class SubCategoryListing(val categoryId: String, val subcategoryId: String? = null, val initialQuery: String = "") : Screen
     data class ProductDetail(val product: Product) : Screen
     data object Bag : Screen
     data class Search(val initialQuery: String = "") : Screen

@@ -60,5 +60,10 @@ object KidsGColors {
 
     // Aliases for modern screens
     val BackgroundPrimary = Background
+    val BackgroundSoft = Background
     val SurfaceElevated = SurfaceCardSubtle
+    val GreenFresh = Success
+    val GoldYellow = Warning
+    val RedPrimary = Error
+    val BlueAction = AccentSkyBlue
 }

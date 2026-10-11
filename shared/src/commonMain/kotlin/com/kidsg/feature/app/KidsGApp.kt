@@ -27,7 +27,9 @@ import com.kidsg.feature.checkout.AddAddressScreen
 import com.kidsg.feature.checkout.CheckoutScreen
 import com.kidsg.feature.checkout.OrderSuccessScreen
 import com.kidsg.feature.checkout.PaymentMethodScreen
+import com.kidsg.feature.discovery.CategoriesScreen
 import com.kidsg.feature.discovery.DiscoveryScreen
+import com.kidsg.feature.discovery.ProductListingScreen
 import com.kidsg.feature.home.KidsGDeskHomeScreen
 import com.kidsg.feature.home.LocationSelectionDialog
 import com.kidsg.feature.onboarding.OnboardingScreen
@@ -249,11 +251,11 @@ fun KidsGApp(
                             },
                             onNavigateToCategory = { catId ->
                                 currentTab = KidsGNavTab.CATEGORIES
-                                navigateTo(Screen.Discovery(null, catId))
+                                navigateTo(Screen.SubCategoryListing(catId))
                             },
                             onNavigateToSearch = {
                                 currentTab = KidsGNavTab.CATEGORIES
-                                navigateTo(Screen.Discovery(null, null))
+                                navigateTo(Screen.SubCategoryListing(categoryId = "cat_stationery"))
                             },
                             onProductClick = { product ->
                                 navigateTo(Screen.ProductDetail(product))
@@ -285,37 +287,40 @@ fun KidsGApp(
                     }
 
                     is Screen.Discovery -> {
-                        DiscoveryScreen(
+                        if (screen.initialCategoryId != null) {
+                            ProductListingScreen(
+                                categoryId = screen.initialCategoryId,
+                                productRepository = productRepository,
+                                cartRepository = cartRepository,
+                                onProductClick = { product ->
+                                    navigateTo(Screen.ProductDetail(product))
+                                },
+                                onBack = { navigateBack() }
+                            )
+                        } else {
+                            CategoriesScreen(
+                                productRepository = productRepository,
+                                onCategoryClick = { catId ->
+                                    navigateTo(Screen.SubCategoryListing(catId))
+                                },
+                                onSearchClick = { q ->
+                                    navigateTo(Screen.SubCategoryListing(categoryId = "cat_stationery", initialQuery = q))
+                                }
+                            )
+                        }
+                    }
+
+                    is Screen.SubCategoryListing -> {
+                        ProductListingScreen(
+                            categoryId = screen.categoryId,
+                            initialSubcategoryId = screen.subcategoryId,
+                            initialQuery = screen.initialQuery,
                             productRepository = productRepository,
                             cartRepository = cartRepository,
-                            initialMode = screen.initialMode,
-                            initialCategoryId = screen.initialCategoryId,
                             onProductClick = { product ->
                                 navigateTo(Screen.ProductDetail(product))
                             },
-                            onBackToHome = {
-                                currentTab = KidsGNavTab.HOME
-                                currentScreen = Screen.Home
-                            },
-                            onAddToCart = { product ->
-                                coroutineScope.launch {
-                                    cartRepository.addToCart(product, 1)
-                                }
-                            },
-                            onIncreaseQuantity = { product ->
-                                val item = cart.items.find { it.product.id == product.id }
-                                val qty = (item?.quantity ?: 0) + 1
-                                coroutineScope.launch {
-                                    cartRepository.updateQuantity(product.id, qty)
-                                }
-                            },
-                            onDecreaseQuantity = { product ->
-                                val item = cart.items.find { it.product.id == product.id }
-                                val qty = (item?.quantity ?: 0) - 1
-                                coroutineScope.launch {
-                                    cartRepository.updateQuantity(product.id, qty)
-                                }
-                            }
+                            onBack = { navigateBack() }
                         )
                     }
 
@@ -323,10 +328,14 @@ fun KidsGApp(
                         ProductDeskViewScreen(
                             product = screen.product,
                             cartRepository = cartRepository,
+                            productRepository = productRepository,
                             onBack = { navigateBack() },
                             onGoToBag = {
                                 currentTab = KidsGNavTab.BAG
                                 currentScreen = Screen.Bag
+                            },
+                            onProductClick = { p ->
+                                navigateTo(Screen.ProductDetail(p))
                             }
                         )
                     }

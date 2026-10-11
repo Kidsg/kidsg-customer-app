@@ -20,4 +20,16 @@ router.get('/categories/:id', (req: Request, res: Response) => {
   sendSuccess(res, category);
 });
 
+// GET /api/categories/:id/subcategories
+router.get('/categories/:id/subcategories', (req: Request, res: Response) => {
+  const subcategories = db.getSubcategories(String(req.params.id));
+  sendSuccess(res, subcategories);
+});
+
+// GET /api/subcategories
+router.get('/subcategories', (_req: Request, res: Response) => {
+  const subcategories = db.getSubcategories();
+  sendSuccess(res, subcategories);
+});
+
 export default router;

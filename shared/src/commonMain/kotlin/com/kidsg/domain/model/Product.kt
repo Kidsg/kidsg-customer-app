@@ -20,7 +20,11 @@ data class Product(
     val stockQuantity: Int = 50,
     val isBestSeller: Boolean = false,
     val tags: List<String> = emptyList(),
-    val intentModes: List<String> = emptyList()
+    val intentModes: List<String> = emptyList(),
+    val subcategoryId: String = "",
+    val galleryImages: List<String> = emptyList(),
+    val sku: String = "",
+    val badgeText: String? = null
 ) {
     val discountPercentage: Int
         get() = if (mrp > price) (((mrp - price) / mrp) * 100).toInt() else 0

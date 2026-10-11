@@ -29,6 +29,7 @@ router.get('/products', (req: Request, res: Response) => {
   const limit = parseInt(req.query.limit as string) || 20;
   const search = (req.query.search as string) || (req.query.q as string);
   const categoryId = req.query.category as string;
+  const subcategoryId = req.query.subcategory as string;
   const brand = req.query.brand as string;
   const sort = req.query.sort as string;
 
@@ -37,6 +38,7 @@ router.get('/products', (req: Request, res: Response) => {
     limit,
     search,
     categoryId,
+    subcategoryId,
     brand,
     sort,
   });
@@ -50,6 +52,72 @@ router.get('/products', (req: Request, res: Response) => {
       totalPages: Math.ceil(result.total / limit),
     },
   });
+});
+
+// GET /api/products/:id/reviews
+router.get('/products/:id/reviews', (req: Request, res: Response) => {
+  const reviews = db.getProductReviews(String(req.params.id));
+  sendSuccess(res, reviews);
+});
+
+// POST /api/products/:id/reviews
+router.post('/products/:id/reviews', (req: Request, res: Response) => {
+  const { authorName, authorRole, rating, comment } = req.body;
+  if (!comment) {
+    sendError(res, 'Comment is required', 'VALIDATION_ERROR', 400);
+    return;
+  }
+  const review = db.addProductReview(String(req.params.id), {
+    productId: String(req.params.id),
+    authorName: authorName || 'Student Reviewer',
+    authorRole: authorRole || 'Student',
+    rating: Number(rating) || 5.0,
+    dateText: 'Just now',
+    comment,
+    isVerifiedPurchase: true,
+    helpfulCount: 0,
+  });
+  sendSuccess(res, review, 'Review submitted successfully');
+});
+
+// GET /api/products/:id/qa
+router.get('/products/:id/qa', (req: Request, res: Response) => {
+  const qa = db.getProductQa(String(req.params.id));
+  sendSuccess(res, qa);
+});
+
+// POST /api/products/:id/qa
+router.post('/products/:id/qa', (req: Request, res: Response) => {
+  const { question } = req.body;
+  if (!question) {
+    sendError(res, 'Question is required', 'VALIDATION_ERROR', 400);
+    return;
+  }
+  const newQa = db.addProductQa(String(req.params.id), question);
+  sendSuccess(res, newQa, 'Question submitted successfully');
+});
+
+// GET /api/products/:id/bundle
+router.get('/products/:id/bundle', (req: Request, res: Response) => {
+  const bundle = db.getProductBundle(String(req.params.id));
+  sendSuccess(res, bundle);
+});
+
+// GET /api/products/:id/related
+router.get('/products/:id/related', (req: Request, res: Response) => {
+  const product = db.getProductById(String(req.params.id));
+  if (!product) {
+    sendError(res, 'Product not found', 'PRODUCT_NOT_FOUND', 404);
+    return;
+  }
+  const type = (req.query.type as string) || 'similar';
+  let related = db.getProducts({ limit: 10 }).products.filter(p => p.id !== product.id);
+  if (type === 'brand') {
+    related = related.filter(p => p.brand.toLowerCase() === product.brand.toLowerCase());
+  } else if (type === 'category') {
+    related = related.filter(p => p.categoryId === product.categoryId);
+  }
+  sendSuccess(res, related.slice(0, 8));
 });
 
 // GET /api/products/:id

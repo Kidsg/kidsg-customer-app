@@ -10,6 +10,47 @@ export interface Category {
   isActive: boolean;
 }
 
+export interface Subcategory {
+  id: string;
+  categoryId: string;
+  name: string;
+  slug: string;
+  iconName?: string;
+  itemCount: number;
+  displayOrder: number;
+  isActive: boolean;
+}
+
+export interface ProductReview {
+  id: string;
+  productId: string;
+  authorName: string;
+  authorRole: string;
+  rating: number;
+  dateText: string;
+  comment: string;
+  isVerifiedPurchase: boolean;
+  helpfulCount: number;
+  photoUrls?: string[];
+}
+
+export interface ProductQa {
+  id: string;
+  productId: string;
+  question: string;
+  answer: string;
+  answeredBy: string;
+  answeredDateText: string;
+}
+
+export interface ProductBundle {
+  id: string;
+  productId: string;
+  title: string;
+  discountPercent: number;
+  items: Product[];
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -18,7 +59,9 @@ export interface Product {
   brand: string;
   categoryId: string;
   categoryName?: string;
+  subcategoryId?: string;
   imageUrl: string;
+  galleryImages?: string[];
   price: number;
   mrp: number;
   discountPercent: number;
@@ -28,6 +71,8 @@ export interface Product {
   isFeatured: boolean;
   isActive: boolean;
   specs: Record<string, string>;
+  sku?: string;
+  badgeText?: string;
 }
 
 export interface Store {
@@ -163,7 +208,10 @@ export interface SupportTicket {
 // In-Memory Master Store initialized with development seed data
 export class KidsGDatabase {
   private categories: Category[] = [];
+  private subcategories: Subcategory[] = [];
   private products: Product[] = [];
+  private reviews: Map<string, ProductReview[]> = new Map();
+  private qa: Map<string, ProductQa[]> = new Map();
   private stores: Store[] = [];
   private storeInventory: Map<string, number> = new Map(); // storeId_productId -> quantity
   private coupons: Coupon[] = [];
@@ -194,6 +242,25 @@ export class KidsGDatabase {
       { id: 'cat_sticky', name: 'Sticky Notes & Flags', slug: 'sticky-notes', iconName: 'sticky', displayOrder: 8, isActive: true },
       { id: 'cat_bags', name: 'School Bags & Pouches', slug: 'bags-pouches', iconName: 'backpack', displayOrder: 9, isActive: true },
       { id: 'cat_bottles', name: 'Water Bottles & Lunch', slug: 'bottles-lunch', iconName: 'bottle', displayOrder: 10, isActive: true },
+    ];
+
+    // Subcategories
+    this.subcategories = [
+      { id: 'sub_notebooks_single', categoryId: 'cat_notebooks', name: 'Single Line Notebooks', slug: 'notebooks-single', iconName: 'notebook', itemCount: 22, displayOrder: 1, isActive: true },
+      { id: 'sub_notebooks_four', categoryId: 'cat_notebooks', name: 'Four Line Notebooks', slug: 'notebooks-four', iconName: 'notebook', itemCount: 20, displayOrder: 2, isActive: true },
+      { id: 'sub_notebooks_grid', categoryId: 'cat_notebooks', name: 'Square Grid Maths', slug: 'notebooks-grid', iconName: 'notebook', itemCount: 20, displayOrder: 3, isActive: true },
+      { id: 'sub_notebooks_unruled', categoryId: 'cat_notebooks', name: 'Unruled Drawing & Rough', slug: 'notebooks-unruled', iconName: 'notebook', itemCount: 20, displayOrder: 4, isActive: true },
+      { id: 'sub_pens_ball', categoryId: 'cat_pens', name: 'Ball Point Pens', slug: 'pens-ball', iconName: 'pen', itemCount: 21, displayOrder: 5, isActive: true },
+      { id: 'sub_pens_gel', categoryId: 'cat_pens', name: 'Gel Pens', slug: 'pens-gel', iconName: 'pen', itemCount: 20, displayOrder: 6, isActive: true },
+      { id: 'sub_pencils_graphite', categoryId: 'cat_pencils', name: 'Graphite Pencils', slug: 'pencils-graphite', iconName: 'pencil', itemCount: 21, displayOrder: 7, isActive: true },
+      { id: 'sub_erasers', categoryId: 'cat_pencils', name: 'Dust-Free Erasers', slug: 'erasers', iconName: 'eraser', itemCount: 21, displayOrder: 8, isActive: true },
+      { id: 'sub_sharpeners', categoryId: 'cat_pencils', name: 'Precision Sharpeners', slug: 'sharpeners', iconName: 'sharpener', itemCount: 21, displayOrder: 9, isActive: true },
+      { id: 'sub_geometry_boxes', categoryId: 'cat_geometry', name: 'Geometry Box Sets', slug: 'geometry-boxes', iconName: 'ruler', itemCount: 21, displayOrder: 10, isActive: true },
+      { id: 'sub_drawing_colours', categoryId: 'cat_art', name: 'Colouring & Drawing', slug: 'drawing-colours', iconName: 'palette', itemCount: 21, displayOrder: 11, isActive: true },
+      { id: 'sub_crafts', categoryId: 'cat_art', name: 'Craft & Origami', slug: 'crafts', iconName: 'craft', itemCount: 21, displayOrder: 12, isActive: true },
+      { id: 'sub_bags', categoryId: 'cat_bags', name: 'Ergonomic Backpacks', slug: 'bags', iconName: 'backpack', itemCount: 21, displayOrder: 13, isActive: true },
+      { id: 'sub_bottles', categoryId: 'cat_bottles', name: 'Insulated Stainless Steel Bottles', slug: 'bottles', iconName: 'bottle', itemCount: 21, displayOrder: 14, isActive: true },
+      { id: 'sub_lunch', categoryId: 'cat_bottles', name: 'Stainless Steel Lunch Boxes', slug: 'lunch', iconName: 'lunchbox', itemCount: 21, displayOrder: 15, isActive: true },
     ];
 
     // 30+ Realistic Stationery Products (Matching KidsG Desk Aesthetic)
@@ -885,10 +952,117 @@ export class KidsGDatabase {
     return this.categories.find(c => (c.id === id || c.slug === id) && c.isActive);
   }
 
+  // --- Subcategory Operations ---
+  getSubcategories(categoryId?: string): Subcategory[] {
+    if (categoryId) {
+      const cleanId = categoryId.replace('cat_', '');
+      return this.subcategories.filter(s => (s.categoryId === categoryId || s.categoryId.replace('cat_', '') === cleanId) && s.isActive);
+    }
+    return this.subcategories.filter(s => s.isActive).sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
+  // --- Product Review & QA Operations ---
+  getProductReviews(productId: string): ProductReview[] {
+    const list = this.reviews.get(productId) || [];
+    if (list.length === 0) {
+      return [
+        {
+          id: `rev_sample_1_${productId}`,
+          productId,
+          authorName: 'Sneha Sharma',
+          authorRole: 'Parent (Grade 6 CBSE)',
+          rating: 4.8,
+          dateText: '3 days ago',
+          comment: 'Outstanding quality. Paper is completely ink-proof and binding is solid for daily school rough use.',
+          isVerifiedPurchase: true,
+          helpfulCount: 18,
+        },
+        {
+          id: `rev_sample_2_${productId}`,
+          productId,
+          authorName: 'Rohan Deshmukh',
+          authorRole: 'Student (Grade 8)',
+          rating: 4.5,
+          dateText: '1 week ago',
+          comment: 'Perfect for fast handwriting during examinations. Very smooth finish.',
+          isVerifiedPurchase: true,
+          helpfulCount: 9,
+        }
+      ];
+    }
+    return list;
+  }
+
+  addProductReview(productId: string, review: Omit<ProductReview, 'id'>): ProductReview {
+    const newReview: ProductReview = {
+      ...review,
+      id: `rev_${randomUUID()}`,
+      productId,
+    };
+    const current = this.reviews.get(productId) || [];
+    current.unshift(newReview);
+    this.reviews.set(productId, current);
+    return newReview;
+  }
+
+  getProductQa(productId: string): ProductQa[] {
+    const list = this.qa.get(productId) || [];
+    if (list.length === 0) {
+      return [
+        {
+          id: `qa_sample_1_${productId}`,
+          productId,
+          question: 'Is this product compliant with CBSE & ICSE school syllabus?',
+          answer: 'Yes! Strictly certified per school standards and recommended by top teachers.',
+          answeredBy: 'KidsG School Expert',
+          answeredDateText: 'Verified response',
+        },
+        {
+          id: `qa_sample_2_${productId}`,
+          productId,
+          question: 'Can this be delivered in 15 minutes?',
+          answer: 'Yes, dispatched directly from our nearest neighborhood partner dark store.',
+          answeredBy: 'KidsG Logistics',
+          answeredDateText: 'Verified response',
+        }
+      ];
+    }
+    return list;
+  }
+
+  addProductQa(productId: string, question: string): ProductQa {
+    const newQa: ProductQa = {
+      id: `qa_${randomUUID()}`,
+      productId,
+      question,
+      answer: 'Thank you for asking! Our verified stationery curator will review and post an answer shortly.',
+      answeredBy: 'KidsG Support',
+      answeredDateText: 'Just now',
+    };
+    const current = this.qa.get(productId) || [];
+    current.unshift(newQa);
+    this.qa.set(productId, current);
+    return newQa;
+  }
+
+  getProductBundle(productId: string): ProductBundle | null {
+    const baseProduct = this.getProductById(productId);
+    if (!baseProduct) return null;
+    const complements = this.products.filter(p => p.id !== productId && p.isActive).slice(0, 2);
+    return {
+      id: `bundle_${productId}`,
+      productId,
+      title: 'Frequently Bought Together Pack',
+      discountPercent: 10,
+      items: [baseProduct, ...complements],
+    };
+  }
+
   // --- Product Operations ---
   getProducts(params?: {
     search?: string;
     categoryId?: string;
+    subcategoryId?: string;
     brand?: string;
     featured?: boolean;
     page?: number;
@@ -911,6 +1085,10 @@ export class KidsGDatabase {
     if (params?.categoryId) {
       const catId = params.categoryId.toLowerCase();
       result = result.filter(p => p.categoryId === params.categoryId || p.categoryName?.toLowerCase() === catId);
+    }
+
+    if (params?.subcategoryId) {
+      result = result.filter(p => p.subcategoryId === params.subcategoryId);
     }
 
     if (params?.brand) {
