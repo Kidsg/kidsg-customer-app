@@ -129,7 +129,7 @@ class OnboardingStateHolder(
                 it.copy(
                     stage = OnboardingStage.TRANSITION,
                     isAnimationPlaying = true,
-                    headlineText = "KidsG",
+                    headlineText = "BookBuddys",
                     subtitleText = "Small Supplies. Big Futures."
                 )
             }
@@ -140,7 +140,7 @@ class OnboardingStateHolder(
                 it.copy(
                     stage = OnboardingStage.WELCOME,
                     isAnimationPlaying = false,
-                    headlineText = "Welcome to KidsG!",
+                    headlineText = "Welcome to BookBuddys!",
                     subtitleText = "Let's make learning more fun ✨"
                 )
             }

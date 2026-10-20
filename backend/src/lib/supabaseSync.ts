@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase.js';
 import { db } from './db.js';
 import { env } from '../config/env.js';
-import { Order } from '../types/index.js';
+import { Order } from './db.js';
 
 export async function seedSupabaseCatalog(): Promise<{
   success: boolean;
@@ -245,10 +245,11 @@ export async function syncOrderToSupabase(userEmail: string, order: Order, clien
     // 5. Save Items to `order_items` table
     for (const item of order.items) {
       let prodDbId = 'b0000000-0000-0000-0000-000000000001';
+      const prodSlug = item.product?.slug || item.productId;
       const { data: prodData } = await supabaseAdmin
         .from('products')
         .select('id')
-        .eq('slug', item.product?.slug || item.productId)
+        .eq('slug', prodSlug)
         .maybeSingle();
 
       if (prodData?.id) {
@@ -257,14 +258,14 @@ export async function syncOrderToSupabase(userEmail: string, order: Order, clien
         const { data: catData } = await supabaseAdmin.from('categories').select('id').limit(1).maybeSingle();
         const catId = catData?.id || 'c0000000-0000-0000-0000-000000000001';
         const { data: newProd } = await supabaseAdmin.from('products').insert({
-          name: item.product?.name || 'Classmate Stationery',
-          slug: item.product?.slug || item.productId || `prod_${randomUUID().substring(0, 8)}`,
+          name: item.product?.name || item.productName || 'Classmate Stationery',
+          slug: prodSlug || `prod_${randomUUID().substring(0, 8)}`,
           description: item.product?.description || 'School stationery item',
           brand: item.product?.brand || 'Classmate',
           category_id: catId,
           image_url: item.product?.imageUrl || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500',
-          price: item.priceSnapshot || 95,
-          mrp: item.mrpSnapshot || 110,
+          price: item.priceSnapshot || item.price || 95,
+          mrp: item.mrpSnapshot || item.mrp || 110,
           discount_percent: 10,
           stock: 50,
           unit: 'piece',
@@ -277,11 +278,11 @@ export async function syncOrderToSupabase(userEmail: string, order: Order, clien
       await supabaseAdmin.from('order_items').insert({
         order_id: orderDbId,
         product_id: prodDbId,
-        product_name_snapshot: item.product?.name || 'Stationery Item',
-        price_snapshot: item.priceSnapshot,
-        mrp_snapshot: item.mrpSnapshot,
+        product_name_snapshot: item.product?.name || item.productName || 'Stationery Item',
+        price_snapshot: item.priceSnapshot || item.price,
+        mrp_snapshot: item.mrpSnapshot || item.mrp,
         quantity: item.quantity,
-        variant_snapshot: item.selectedVariant || null,
+        variant_snapshot: item.selectedVariant || item.variant || null,
       });
     }
 
@@ -359,9 +360,13 @@ export async function fetchUserOrdersFromSupabase(userEmail: string): Promise<Or
       orderNumber: o.order_number,
       userId: o.user_id,
       storeId: o.store_id,
+      storeName: o.stores?.name || 'Vidya Book & Stationery Depot',
       items: (o.order_items || []).map((oi: any) => ({
         id: oi.id,
         productId: oi.product_id,
+        productName: oi.product_name_snapshot || 'Stationery Item',
+        price: Number(oi.price_snapshot || 0),
+        mrp: Number(oi.mrp_snapshot || 0),
         quantity: oi.quantity,
         priceSnapshot: Number(oi.price_snapshot),
         mrpSnapshot: Number(oi.mrp_snapshot),
@@ -444,9 +449,13 @@ export async function fetchShopOrdersFromSupabase(storeId?: string, statusFilter
       orderNumber: o.order_number,
       userId: o.user_id,
       storeId: o.store_id,
+      storeName: o.stores?.name || 'Vidya Book & Stationery Depot',
       items: (o.order_items || []).map((oi: any) => ({
         id: oi.id,
         productId: oi.product_id,
+        productName: oi.product_name_snapshot || 'Stationery Item',
+        price: Number(oi.price_snapshot || 0),
+        mrp: Number(oi.mrp_snapshot || 0),
         quantity: oi.quantity,
         priceSnapshot: Number(oi.price_snapshot),
         mrpSnapshot: Number(oi.mrp_snapshot),

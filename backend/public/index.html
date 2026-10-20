@@ -1,12 +1,1392 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>KidsG API Server</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookBuddys — Hyperlocal Stationery Delivery in Bengaluru</title>
+  <meta name="description" content="Hyperlocal stationery commerce for Bengaluru. Get notebooks, pens, exam supplies and school essentials delivered fast from your neighbourhood stationery store." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #f97316;
+      --primary-hover: #ea580c;
+      --primary-subtle: #fff7ed;
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #24324a;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font: 'Plus Jakarta Sans', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    header {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0.85rem 1.5rem;
+    }
+    .header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .brand-icon {
+      font-size: 1.8rem;
+      background: linear-gradient(135deg, #f97316, #fbbf24);
+      border-radius: 10px;
+      padding: 0.2rem 0.5rem;
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+    }
+    .brand-text h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+    }
+    .brand-text span {
+      font-size: 0.75rem;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+
+    .locality-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.85rem;
+    }
+    .locality-selector select {
+      background: transparent;
+      color: var(--text-main);
+      border: none;
+      outline: none;
+      font-family: var(--font);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-gps {
+      background: rgba(249, 115, 22, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+      border-radius: 20px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-gps:hover { background: var(--primary); color: #fff; }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+    .btn-track {
+      background: transparent;
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s;
+    }
+    .btn-track:hover { border-color: var(--primary); color: var(--primary); }
+
+    .btn-bag {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.55rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 14px rgba(249, 115, 22, 0.3);
+      transition: all 0.2s;
+    }
+    .btn-bag:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .bag-count {
+      background: white;
+      color: var(--primary);
+      border-radius: 50%;
+      padding: 0.1rem 0.45rem;
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+
+    /* Hero Banner */
+    .hero {
+      max-width: 1280px;
+      margin: 1.5rem auto 1rem;
+      padding: 0 1.5rem;
+    }
+    .hero-card {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-card::after {
+      content: '';
+      position: absolute;
+      right: -40px;
+      top: -40px;
+      width: 250px;
+      height: 250px;
+      background: radial-gradient(circle, rgba(249, 115, 22, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-content h2 {
+      font-size: 1.8rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      line-height: 1.2;
+    }
+    .hero-content h2 span { color: var(--primary); }
+    .hero-content p {
+      color: var(--text-muted);
+      max-width: 600px;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+    }
+    .active-hub-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--success);
+      padding: 0.35rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    /* Category Nav */
+    .categories-bar {
+      max-width: 1280px;
+      margin: 1rem auto;
+      padding: 0 1.5rem;
+      display: flex;
+      gap: 0.6rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .cat-pill {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.45rem 1rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cat-pill:hover, .cat-pill.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    /* Search & Filters */
+    .controls-bar {
+      max-width: 1280px;
+      margin: 0 auto 1.5rem;
+      padding: 0 1.5rem;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .search-box {
+      flex: 1;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem 0.75rem 2.5rem;
+      border-radius: 10px;
+      color: var(--text-main);
+      font-family: var(--font);
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .search-box input:focus { border-color: var(--primary); }
+    .search-icon {
+      position: absolute;
+      left: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+    }
+
+    /* Product Grid */
+    .products-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
+    }
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.25rem;
+    }
+    .product-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.2s;
+    }
+    .product-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(249, 115, 22, 0.4);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+    }
+    .product-img-wrap {
+      height: 180px;
+      background: #151f32;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .product-img {
+      max-width: 80%;
+      max-height: 80%;
+      object-fit: contain;
+      transition: transform 0.3s;
+    }
+    .product-card:hover .product-img { transform: scale(1.05); }
+    .stock-badge {
+      position: absolute;
+      top: 0.6rem;
+      left: 0.6rem;
+      background: rgba(16, 185, 129, 0.9);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      backdrop-filter: blur(4px);
+    }
+    .stock-badge.low { background: rgba(245, 158, 11, 0.9); }
+    .store-badge {
+      position: absolute;
+      bottom: 0.6rem;
+      left: 0.6rem;
+      background: rgba(15, 23, 42, 0.85);
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .product-body {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+    .product-cat {
+      font-size: 0.72rem;
+      color: var(--primary);
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .product-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 0.35rem;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .product-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      flex: 1;
+    }
+    .product-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: auto;
+      pt: 0.5rem;
+    }
+    .price-box {
+      display: flex;
+      align-items: baseline;
+      gap: 0.4rem;
+    }
+    .curr-price {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .mrp-price {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-decoration: line-through;
+    }
+    .btn-add {
+      background: rgba(249, 115, 22, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 0.45rem 0.9rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-add:hover {
+      background: var(--primary);
+      color: white;
+    }
+    .qty-control {
+      display: flex;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--primary);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .qty-btn {
+      background: transparent;
+      border: none;
+      color: var(--primary);
+      font-weight: 800;
+      font-size: 1rem;
+      padding: 0.25rem 0.6rem;
+      cursor: pointer;
+    }
+    .qty-btn:hover { background: var(--primary); color: white; }
+    .qty-val {
+      padding: 0 0.5rem;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+
+    /* Cart Drawer */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .drawer-overlay.active { opacity: 1; pointer-events: auto; }
+    .cart-drawer {
+      position: fixed;
+      top: 0;
+      right: -450px;
+      width: 100%;
+      max-width: 420px;
+      height: 100vh;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border);
+      z-index: 201;
+      display: flex;
+      flex-direction: column;
+      transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .cart-drawer.active { right: 0; }
+    .drawer-header {
+      padding: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .drawer-header h3 { font-size: 1.15rem; font-weight: 800; }
+    .btn-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.4rem;
+      cursor: pointer;
+    }
+    .btn-close:hover { color: white; }
+    .drawer-items {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .cart-item {
+      display: flex;
+      gap: 0.8rem;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem;
+      align-items: center;
+    }
+    .cart-item-img {
+      width: 50px;
+      height: 50px;
+      object-fit: contain;
+      background: #151f32;
+      border-radius: 6px;
+    }
+    .cart-item-info { flex: 1; }
+    .cart-item-title { font-size: 0.85rem; font-weight: 700; line-height: 1.2; margin-bottom: 0.2rem; }
+    .cart-item-price { font-size: 0.85rem; color: var(--primary); font-weight: 800; }
+    .drawer-footer {
+      padding: 1.25rem;
+      border-top: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.7);
+    }
+    .bill-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .bill-row.total {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: white;
+      border-top: 1px dashed var(--border);
+      padding-top: 0.6rem;
+      margin-top: 0.6rem;
+    }
+    .btn-checkout {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.85rem;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 1rem;
+      box-shadow: 0 4px 16px rgba(249, 115, 22, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-checkout:hover { background: var(--primary-hover); }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 1.75rem;
+      position: relative;
+    }
+    .modal-card h3 { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.4rem; }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .form-control {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      color: white;
+      font-family: var(--font);
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .form-control:focus { border-color: var(--primary); }
+
+    .payment-box {
+      background: rgba(249, 115, 22, 0.08);
+      border: 1px dashed var(--primary);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+      margin: 1rem 0;
+    }
+    .upi-id {
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 0.4rem 0;
+      user-select: all;
+    }
+
+    /* Timeline in Modal */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      margin: 1.5rem 0;
+      position: relative;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 14px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-step {
+      display: flex;
+      gap: 1rem;
+      position: relative;
+    }
+    .step-dot {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 800;
+      z-index: 2;
+    }
+    .step-dot.done {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+    }
+    .step-dot.current {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+      box-shadow: 0 0 12px rgba(249, 115, 22, 0.5);
+    }
+    .step-info h4 { font-size: 0.95rem; font-weight: 700; }
+    .step-info p { font-size: 0.78rem; color: var(--text-muted); }
+
+    /* Footer */
+    footer {
+      background: #090e1a;
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 1.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .footer-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-right: 1.25rem;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--primary); }
+    .admin-link {
+      background: rgba(249, 115, 22, 0.15);
+      color: var(--primary) !important;
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      border: 1px solid rgba(249, 115, 22, 0.3);
+      font-weight: 700;
+    }
+
+    @media (max-width: 768px) {
+      .header-inner { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+      .header-actions { justify-content: space-between; }
+      .hero-card { flex-direction: column; align-items: flex-start; gap: 1rem; }
+    }
+  </style>
 </head>
 <body>
-  <h1>KidsG API Server is Running</h1>
-  <p>Status: OK</p>
-  <p><a href="/api/health">Check API Health</a></p>
+
+  <!-- App Header -->
+  <header>
+    <div class="header-inner">
+      <a href="/" class="brand">
+        <span class="brand-icon">🎒</span>
+        <div class="brand-text">
+          <h1>BookBuddys</h1>
+          <span>Bengaluru Hyperlocal</span>
+        </div>
+      </a>
+
+      <!-- Locality / Delivery Hub Selection -->
+      <div class="locality-selector">
+        <span>📍</span>
+        <select id="localitySelect" onchange="onLocalityChange()">
+          <option value="12.9352,77.6245" data-name="Koramangala 4th Block">Koramangala (560034)</option>
+          <option value="12.9784,77.6408" data-name="Indiranagar 100ft Rd">Indiranagar (560038)</option>
+          <option value="13.0031,77.5643" data-name="Malleshwaram 8th Cross">Malleshwaram (560003)</option>
+          <option value="12.9250,77.5938" data-name="Jayanagar 4th Block">Jayanagar (560041)</option>
+        </select>
+        <button class="btn-gps" onclick="detectGPSLocation()">Use GPS</button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="header-actions">
+        <button class="btn-track" onclick="openTrackModal()">
+          <span>🔍</span> Track Order
+        </button>
+        <button class="btn-bag" onclick="toggleCartDrawer(true)">
+          <span>🛍️</span> Bag
+          <span class="bag-count" id="bagCount">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Banner -->
+  <section class="hero">
+    <div class="hero-card">
+      <div class="hero-content">
+        <h2>Stationery at School Speed in <span>Bengaluru</span></h2>
+        <p>Real stock from verified neighbourhood stationery partners. Classmate notebooks, Doms art supplies, exam pouches, and scientific calculators delivered straight to your desk.</p>
+        <div class="active-hub-pill">
+          <span>●</span>
+          <span id="activeHubText">Connecting to nearest Bengaluru Stationery Depot...</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Category Nav -->
+  <nav class="categories-bar" id="categoryNav">
+    <button class="cat-pill active" onclick="filterCategory('')">All Stationery</button>
+    <button class="cat-pill" onclick="filterCategory('NOTEBOOKS')">Notebooks & Registers</button>
+    <button class="cat-pill" onclick="filterCategory('PENS_PENCILS')">Pens & Pencils</button>
+    <button class="cat-pill" onclick="filterCategory('ART_CRAFT')">Art & Craft</button>
+    <button class="cat-pill" onclick="filterCategory('KITS')">School Kits</button>
+    <button class="cat-pill" onclick="filterCategory('GEOMETRY')">Geometry Boxes</button>
+    <button class="cat-pill" onclick="filterCategory('EXAM')">Exam Supplies</button>
+  </nav>
+
+  <!-- Search & Filter Controls -->
+  <div class="controls-bar">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Search Classmate notebooks, Doms pencils, Camlin geometry..." oninput="onSearchInput()" />
+    </div>
+  </div>
+
+  <!-- Product Catalogue Grid -->
+  <main class="products-container">
+    <div class="products-grid" id="productsGrid">
+      <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
+        Loading location-eligible products for your Bengaluru address...
+      </div>
+    </div>
+  </main>
+
+  <!-- Cart / Bag Drawer -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="toggleCartDrawer(false)"></div>
+  <aside class="cart-drawer" id="cartDrawer">
+    <div class="drawer-header">
+      <h3>School Bag (<span id="drawerBagCount">0</span>)</h3>
+      <button class="btn-close" onclick="toggleCartDrawer(false)">&times;</button>
+    </div>
+    <div class="drawer-items" id="cartItemsList">
+      <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+        Your school bag is empty. Add notebooks or pens to start!
+      </div>
+    </div>
+    <div class="drawer-footer">
+      <div class="bill-row">
+        <span>Items Subtotal</span>
+        <span id="billSubtotal">₹0</span>
+      </div>
+      <div class="bill-row">
+        <span>Delivery Fee (Hyperlocal)</span>
+        <span id="billDelivery">₹30</span>
+      </div>
+      <div class="bill-row">
+        <span>Packaging & GST</span>
+        <span id="billTax">₹10</span>
+      </div>
+      <div class="bill-row total">
+        <span>Total Payable</span>
+        <span id="billTotal" style="color: var(--primary);">₹0</span>
+      </div>
+      <button class="btn-checkout" id="btnCheckout" onclick="openCheckoutModal()" disabled>
+        Proceed to Checkout
+      </button>
+    </div>
+  </aside>
+
+  <!-- Checkout Modal -->
+  <div class="modal-overlay" id="checkoutModal">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3>Complete Delivery Details</h3>
+        <button class="btn-close" onclick="closeCheckoutModal()">&times;</button>
+      </div>
+
+      <form id="checkoutForm" onsubmit="handlePlaceOrder(event)">
+        <div class="form-group">
+          <label>Student / Recipient Name</label>
+          <input type="text" id="custName" class="form-control" required placeholder="e.g. Aarav Sharma" value="Aarav Sharma" />
+        </div>
+        <div class="form-group">
+          <label>Phone Number (for Delivery Agent)</label>
+          <input type="tel" id="custPhone" class="form-control" required placeholder="+91 98765 43210" value="+91 98765 43210" />
+        </div>
+        <div class="form-group">
+          <label>Bengaluru Delivery Address</label>
+          <textarea id="custAddress" class="form-control" rows="2" required placeholder="Flat/House No, Building, Street, Locality">#42, 3rd Cross, 4th Block, Koramangala, Bengaluru, Karnataka 560034</textarea>
+        </div>
+        <div class="form-group">
+          <label>Delivery Instructions / Landmark</label>
+          <input type="text" id="custLandmark" class="form-control" placeholder="Near BDA Complex / Ring doorbell" value="Near Sony World Signal / Drop at desk" />
+        </div>
+
+        <div class="form-group">
+          <label>Select Payment Mode</label>
+          <select id="custPaymentMethod" class="form-control" onchange="onPaymentModeChange()">
+            <option value="UPI">⚡ Instant UPI (Google Pay, PhonePe, Paytm, BHIM)</option>
+            <option value="COD">💵 Cash on Delivery (Pay at Doorstep)</option>
+          </select>
+        </div>
+
+        <div class="payment-box" id="upiInstructionsBox">
+          <p style="font-size: 0.85rem; font-weight: 600;">Direct UPI Merchant Address:</p>
+          <div class="upi-id">bookbuddys@upi</div>
+          <p style="font-size: 0.75rem; color: var(--text-muted);">
+            Scan & Pay from any UPI app. You will be prompted to enter your 12-digit UTR transaction reference right after placing the order request.
+          </p>
+        </div>
+
+        <button type="submit" class="btn-checkout" id="btnPlaceOrder">
+          Confirm Order &bull; <span id="checkoutTotal">₹0</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Payment UTR Submission Modal -->
+  <div class="modal-overlay" id="utrModal">
+    <div class="modal-card">
+      <h3>Submit UPI Transaction Reference</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Order <strong id="utrOrderNumber" style="color: var(--primary);">#ORD-1001</strong> placed! Please submit your 12-digit UPI UTR number so our founder can verify your payment.
+      </p>
+
+      <form id="utrForm" onsubmit="handleUtrSubmit(event)">
+        <input type="hidden" id="utrOrderId" />
+        <div class="form-group">
+          <label>12-Digit Bank UTR / Reference ID</label>
+          <input type="text" id="utrNumber" class="form-control" required placeholder="e.g. 429810982341" pattern="[A-Za-z0-9]{8,22}" />
+        </div>
+        <div class="form-group">
+          <label>UPI App Used</label>
+          <select id="utrApp" class="form-control">
+            <option value="Google Pay">Google Pay</option>
+            <option value="PhonePe">PhonePe</option>
+            <option value="Paytm">Paytm</option>
+            <option value="BHIM">BHIM UPI</option>
+            <option value="CRED">CRED</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Optional Notes</label>
+          <input type="text" id="utrNotes" class="form-control" placeholder="Sender Name or account last 4 digits" />
+        </div>
+        <button type="submit" class="btn-checkout">
+          Verify Payment with Founder
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Live Order Tracking Modal -->
+  <div class="modal-overlay" id="trackModal">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3>Live Order Journey</h3>
+        <button class="btn-close" onclick="closeTrackModal()">&times;</button>
+      </div>
+
+      <div class="form-group" style="display: flex; gap: 0.5rem;">
+        <input type="text" id="trackInput" class="form-control" placeholder="Enter Order Number or ID (e.g. ORD-1001)" />
+        <button class="btn-gps" onclick="fetchOrderTimeline(document.getElementById('trackInput').value)">Track</button>
+      </div>
+
+      <div id="timelineContainer">
+        <p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 2rem 0;">
+          Enter your order number above to track real-time shop confirmation, verification, and dispatch.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Policies & Support Modal -->
+  <div class="modal-overlay" id="policyModal">
+    <div class="modal-card" style="max-width: 650px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 id="policyModalTitle">Information</h3>
+        <button class="btn-close" onclick="closePolicyModal()">&times;</button>
+      </div>
+      <div id="policyModalBody" style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6;"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-inner">
+      <div>
+        <h4 style="color: white; font-size: 1.1rem; margin-bottom: 0.35rem;">🎒 BookBuddys</h4>
+        <p>Hyperlocal Stationery Commerce Platform &bull; Bengaluru, India</p>
+        <p style="margin-top: 0.25rem;">Operating Hours: 7:30 AM – 9:30 PM (All 7 Days)</p>
+      </div>
+
+      <div class="footer-links">
+        <a href="javascript:void(0)" onclick="openPolicy('terms')">Terms of Service</a>
+        <a href="javascript:void(0)" onclick="openPolicy('privacy')">Privacy Policy</a>
+        <a href="javascript:void(0)" onclick="openPolicy('delivery')">Delivery Policy</a>
+        <a href="javascript:void(0)" onclick="openPolicy('refund')">Cancellation & Refunds</a>
+        <a href="javascript:void(0)" onclick="openPolicy('delete')">Account Deletion</a>
+        <a href="/admin" class="admin-link">Founder Control Panel &rarr;</a>
+      </div>
+    </div>
+    <div style="max-width: 1280px; margin: 1.5rem auto 0; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: #64748b; text-align: center;">
+      &copy; 2026 BookBuddys Technologies Pvt. Ltd. Serving Koramangala, Indiranagar, Malleshwaram & Jayanagar.
+    </div>
+  </footer>
+
+  <script>
+    // State
+    let cart = []; // [{ product, quantity, shopPrice }]
+    let products = [];
+    let currentCategory = '';
+    let currentSearch = '';
+    let selectedCoords = { lat: 12.9352, lng: 77.6245 };
+    let currentStore = null;
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      onLocalityChange();
+    });
+
+    function onLocalityChange() {
+      const select = document.getElementById('localitySelect');
+      const [lat, lng] = select.value.split(',').map(Number);
+      selectedCoords = { lat, lng };
+      loadProducts();
+    }
+
+    function detectGPSLocation() {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.');
+        return;
+      }
+      const hubText = document.getElementById('activeHubText');
+      hubText.textContent = 'Acquiring GPS coordinates...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          selectedCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          hubText.textContent = `Using GPS: (${selectedCoords.lat.toFixed(4)}, ${selectedCoords.lng.toFixed(4)})`;
+          loadProducts();
+        },
+        (err) => {
+          alert('GPS permission denied or unavailable. Fallback to Bengaluru Koramangala Hub.');
+          onLocalityChange();
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    }
+
+    async function loadProducts() {
+      const grid = document.getElementById('productsGrid');
+      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">Finding eligible shops & inventory in Bengaluru...</div>';
+
+      try {
+        const url = `/api/products/location-eligible?latitude=${selectedCoords.lat}&longitude=${selectedCoords.lng}${currentCategory ? `&category=${currentCategory}` : ''}${currentSearch ? `&search=${encodeURIComponent(currentSearch)}` : ''}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success) {
+          grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--danger);">${data.error || 'Failed to load products'}</div>`;
+          return;
+        }
+
+        products = data.data.products || [];
+        currentStore = data.data.store;
+
+        const hubText = document.getElementById('activeHubText');
+        if (currentStore) {
+          hubText.textContent = `Fulfilled by ${currentStore.name} (${currentStore.distanceKm} km away • ${currentStore.isOpen ? '🟢 Open Now' : '🔴 Closed'})`;
+        } else {
+          hubText.textContent = '⚠️ No partner stores within 15 km of this location.';
+        }
+
+        renderProducts();
+      } catch (e) {
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--danger);">Network error fetching catalogue: ${e.message}</div>`;
+      }
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById('productsGrid');
+      if (products.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 4rem 1rem; color: var(--text-muted);">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📚</div>
+            <h3 style="color: white; margin-bottom: 0.25rem;">No Stationery Found</h3>
+            <p style="font-size: 0.85rem;">Try selecting a different category or search term.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = products.map(p => {
+        const cartItem = cart.find(ci => ci.product.id === p.id);
+        const qty = cartItem ? cartItem.quantity : 0;
+        const price = p.price || 50;
+        const mrp = p.mrp || Math.round(price * 1.2);
+        const stockQty = p.inventory?.availableQuantity ?? 20;
+        const lowStock = stockQty <= (p.inventory?.lowStockThreshold ?? 5);
+
+        return `
+          <div class="product-card">
+            <div class="product-img-wrap">
+              <span class="stock-badge ${lowStock ? 'low' : ''}">
+                ${stockQty > 0 ? (lowStock ? `Only ${stockQty} left!` : `In Stock (${stockQty})`) : 'Out of Stock'}
+              </span>
+              <span class="store-badge">${p.inventory?.storeName || 'Bengaluru Store'}</span>
+              <img src="${p.imageUrl || 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400'}" alt="${p.name}" class="product-img" onerror="this.src='https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400'" />
+            </div>
+            <div class="product-body">
+              <span class="product-cat">${p.category}</span>
+              <h4 class="product-title" title="${p.name}">${p.name}</h4>
+              <p class="product-desc">${p.description || ''}</p>
+              <div class="product-footer">
+                <div class="price-box">
+                  <span class="curr-price">₹${price}</span>
+                  ${mrp > price ? `<span class="mrp-price">₹${mrp}</span>` : ''}
+                </div>
+                ${qty > 0 ? `
+                  <div class="qty-control">
+                    <button class="qty-btn" onclick="updateCart('${p.id}', -1)">&minus;</button>
+                    <span class="qty-val">${qty}</span>
+                    <button class="qty-btn" onclick="updateCart('${p.id}', 1)">&plus;</button>
+                  </div>
+                ` : `
+                  <button class="btn-add" onclick="updateCart('${p.id}', 1)" ${stockQty <= 0 ? 'disabled' : ''}>
+                    ${stockQty > 0 ? '+ Add' : 'Sold Out'}
+                  </button>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-pill').forEach(el => el.classList.remove('active'));
+      event.target.classList.add('active');
+      loadProducts();
+    }
+
+    let searchTimer = null;
+    function onSearchInput() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        currentSearch = document.getElementById('searchInput').value.trim();
+        loadProducts();
+      }, 350);
+    }
+
+    // Cart Management
+    function updateCart(productId, delta) {
+      const prod = products.find(p => p.id === productId);
+      if (!prod) return;
+
+      const idx = cart.findIndex(ci => ci.product.id === productId);
+      if (idx > -1) {
+        cart[idx].quantity += delta;
+        if (cart[idx].quantity <= 0) {
+          cart.splice(idx, 1);
+        }
+      } else if (delta > 0) {
+        cart.push({
+          product: prod,
+          quantity: 1,
+          price: prod.price || 50,
+        });
+      }
+
+      updateCartUI();
+      renderProducts();
+    }
+
+    function updateCartUI() {
+      const totalCount = cart.reduce((acc, ci) => acc + ci.quantity, 0);
+      document.getElementById('bagCount').textContent = totalCount;
+      document.getElementById('drawerBagCount').textContent = totalCount;
+
+      const itemsList = document.getElementById('cartItemsList');
+      if (cart.length === 0) {
+        itemsList.innerHTML = `
+          <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+            Your school bag is empty. Add notebooks or pens to start!
+          </div>
+        `;
+        document.getElementById('billSubtotal').textContent = '₹0';
+        document.getElementById('billTotal').textContent = '₹0';
+        document.getElementById('btnCheckout').disabled = true;
+        return;
+      }
+
+      itemsList.innerHTML = cart.map(ci => `
+        <div class="cart-item">
+          <img src="${ci.product.imageUrl || 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=200'}" class="cart-item-img" />
+          <div class="cart-item-info">
+            <div class="cart-item-title">${ci.product.name}</div>
+            <div class="cart-item-price">₹${ci.price * ci.quantity} (₹${ci.price} each)</div>
+          </div>
+          <div class="qty-control">
+            <button class="qty-btn" onclick="updateCart('${ci.product.id}', -1)">&minus;</button>
+            <span class="qty-val">${ci.quantity}</span>
+            <button class="qty-btn" onclick="updateCart('${ci.product.id}', 1)">&plus;</button>
+          </div>
+        </div>
+      `).join('');
+
+      const subtotal = cart.reduce((acc, ci) => acc + (ci.price * ci.quantity), 0);
+      const delivery = subtotal >= 499 ? 0 : 30;
+      const tax = 10;
+      const total = subtotal + delivery + tax;
+
+      document.getElementById('billSubtotal').textContent = `₹${subtotal}`;
+      document.getElementById('billDelivery').textContent = delivery === 0 ? 'FREE' : `₹${delivery}`;
+      document.getElementById('billTax').textContent = `₹${tax}`;
+      document.getElementById('billTotal').textContent = `₹${total}`;
+      document.getElementById('checkoutTotal').textContent = `₹${total}`;
+      document.getElementById('btnCheckout').disabled = false;
+    }
+
+    function toggleCartDrawer(open) {
+      document.getElementById('drawerOverlay').classList.toggle('active', open);
+      document.getElementById('cartDrawer').classList.toggle('active', open);
+    }
+
+    // Checkout Flow
+    function openCheckoutModal() {
+      toggleCartDrawer(false);
+      document.getElementById('checkoutModal').classList.add('active');
+    }
+    function closeCheckoutModal() {
+      document.getElementById('checkoutModal').classList.remove('active');
+    }
+
+    function onPaymentModeChange() {
+      const mode = document.getElementById('custPaymentMethod').value;
+      document.getElementById('upiInstructionsBox').style.display = mode === 'UPI' ? 'block' : 'none';
+    }
+
+    async function handlePlaceOrder(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnPlaceOrder');
+      btn.disabled = true;
+      btn.textContent = 'Securing Order...';
+
+      const paymentMethod = document.getElementById('custPaymentMethod').value;
+      const customerName = document.getElementById('custName').value.trim();
+      const customerPhone = document.getElementById('custPhone').value.trim();
+      const addressLine = document.getElementById('custAddress').value.trim();
+      const landmark = document.getElementById('custLandmark').value.trim();
+
+      const items = cart.map(ci => ({
+        productId: ci.product.id,
+        quantity: ci.quantity,
+        price: ci.price,
+        name: ci.product.name
+      }));
+
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethod,
+            items,
+            notes: landmark,
+            deliveryAddress: {
+              label: 'Delivery Address',
+              recipientName: customerName,
+              phoneNumber: customerPhone,
+              addressLine1: addressLine,
+              landmark: landmark,
+              city: 'Bengaluru',
+              pincode: '560034',
+              latitude: selectedCoords.lat,
+              longitude: selectedCoords.lng
+            }
+          })
+        });
+
+        const data = await res.json();
+        btn.disabled = false;
+        btn.textContent = 'Confirm Order';
+
+        if (!data.success) {
+          alert('Order failed: ' + (data.error || 'Server error'));
+          return;
+        }
+
+        const order = data.data.order;
+        closeCheckoutModal();
+
+        // Clear bag
+        cart = [];
+        updateCartUI();
+        renderProducts();
+
+        if (paymentMethod === 'UPI') {
+          // Show UTR Submission Modal
+          document.getElementById('utrOrderId').value = order.id;
+          document.getElementById('utrOrderNumber').textContent = '#' + order.orderNumber;
+          document.getElementById('utrModal').classList.add('active');
+        } else {
+          alert(`Order #${order.orderNumber} placed successfully! Cash on delivery selected. You can track your order using the order number.`);
+          openTrackModal(order.orderNumber);
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Confirm Order';
+        alert('Error placing order: ' + err.message);
+      }
+    }
+
+    // UTR Submission
+    async function handleUtrSubmit(e) {
+      e.preventDefault();
+      const orderId = document.getElementById('utrOrderId').value;
+      const utrNumber = document.getElementById('utrNumber').value.trim();
+      const paymentApp = document.getElementById('utrApp').value;
+      const notes = document.getElementById('utrNotes').value.trim();
+
+      try {
+        const res = await fetch(`/api/orders/${orderId}/submit-payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ utrNumber, paymentApp, notes })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('utrModal').classList.remove('active');
+          alert('Payment reference submitted! Founder will verify receipt and dispatch your stationery.');
+          openTrackModal(data.data.orderNumber || orderId);
+        } else {
+          alert('Failed to submit UTR: ' + (data.error || 'Invalid reference'));
+        }
+      } catch (err) {
+        alert('Network error submitting UTR: ' + err.message);
+      }
+    }
+
+    // Order Tracking Modal & Timeline
+    function openTrackModal(orderNum = '') {
+      document.getElementById('trackModal').classList.add('active');
+      if (orderNum) {
+        document.getElementById('trackInput').value = orderNum;
+        fetchOrderTimeline(orderNum);
+      }
+    }
+    function closeTrackModal() {
+      document.getElementById('trackModal').classList.remove('active');
+    }
+
+    async function fetchOrderTimeline(orderIdOrNum) {
+      if (!orderIdOrNum) {
+        alert('Please enter an order number or ID.');
+        return;
+      }
+      const container = document.getElementById('timelineContainer');
+      container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">Fetching live status from BookBuddys server...</p>';
+
+      try {
+        const res = await fetch(`/api/orders/${encodeURIComponent(orderIdOrNum)}/timeline`);
+        const data = await res.json();
+        if (!data.success) {
+          container.innerHTML = `<p style="color: var(--danger); text-align: center; padding: 2rem 0;">${data.error || 'Order not found'}</p>`;
+          return;
+        }
+
+        const info = data.data;
+        const timeline = info.timeline || [];
+
+        container.innerHTML = `
+          <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <span style="font-size: 1.1rem; font-weight: 800; color: white;">Order #${info.orderNumber}</span>
+              <span style="font-size: 0.85rem; font-weight: 700; color: var(--primary); text-transform: uppercase;">${info.currentStatus.replace(/_/g, ' ')}</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">
+              Total: ₹${info.total} &bull; Store: ${info.storeName || 'Partner Store'} &bull; Payment: ${info.paymentStatus}
+            </div>
+          </div>
+
+          <div class="timeline">
+            ${timeline.map(step => `
+              <div class="timeline-step">
+                <div class="step-dot ${step.isCompleted ? 'done' : (step.isCurrent ? 'current' : '')}">
+                  ${step.isCompleted ? '✓' : step.step}
+                </div>
+                <div class="step-info">
+                  <h4 style="color: ${step.isCurrent ? 'var(--primary)' : 'white'};">${step.title}</h4>
+                  <p>${step.description}</p>
+                  ${step.timestamp ? `<span style="font-size: 0.7rem; color: #64748b;">${new Date(step.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } catch (e) {
+        container.innerHTML = `<p style="color: var(--danger); text-align: center; padding: 2rem 0;">Error fetching timeline: ${e.message}</p>`;
+      }
+    }
+
+    // Policy & Support Popups
+    function openPolicy(type) {
+      const modal = document.getElementById('policyModal');
+      const title = document.getElementById('policyModalTitle');
+      const body = document.getElementById('policyModalBody');
+
+      if (type === 'terms') {
+        title.textContent = 'Terms of Service';
+        body.innerHTML = `
+          <p><strong>1. Introduction</strong>: Welcome to BookBuddys. By placing an order, you agree to our hyperlocal fulfillment terms in Bengaluru, Karnataka.</p>
+          <p style="margin-top: 0.5rem;"><strong>2. Hyperlocal Delivery</strong>: We partner with verified neighbourhood stationery stores. Delivery speeds depend on distance, road traffic, and weather conditions in Bengaluru.</p>
+          <p style="margin-top: 0.5rem;"><strong>3. Pricing & Integrity</strong>: All prices include applicable taxes. We guarantee authentic products from authorized distributors (ITC Classmate, Doms, Faber-Castell, etc.).</p>
+        `;
+      } else if (type === 'privacy') {
+        title.textContent = 'Privacy Policy';
+        body.innerHTML = `
+          <p><strong>Location Data</strong>: We collect foreground location coordinates strictly to find nearby partner stationery stores and calculate road delivery feasibility. We do not track background GPS or sell your location to third parties.</p>
+          <p style="margin-top: 0.5rem;"><strong>Contact Details</strong>: Your phone number and address are shared only with the assigned delivery partner (e.g. Porter, Rapido) for package drop-off.</p>
+        `;
+      } else if (type === 'delivery') {
+        title.textContent = 'Delivery Policy';
+        body.innerHTML = `
+          <p><strong>Bengaluru Service Zones</strong>: Currently operating across Koramangala, Indiranagar, Malleshwaram, and Jayanagar within a 15 km service radius.</p>
+          <p style="margin-top: 0.5rem;"><strong>Delivery Fee</strong>: Flat ₹30 delivery fee for standard hyperlocal dispatch. Free delivery on orders exceeding ₹499.</p>
+        `;
+      } else if (type === 'refund') {
+        title.textContent = 'Cancellation & Refund Policy';
+        body.innerHTML = `
+          <p><strong>Cancellation Window</strong>: You can cancel free of charge before the partner store confirms stock and begins packaging.</p>
+          <p style="margin-top: 0.5rem;"><strong>Damaged or Incorrect Items</strong>: Report missing, defective, or incorrect stationery within 2 hours of delivery for immediate replacement or full UPI refund within 24 hours.</p>
+        `;
+      } else if (type === 'delete') {
+        title.textContent = 'Account & Data Deletion Request';
+        body.innerHTML = `
+          <p>In compliance with Indian Digital Personal Data Protection standards, you have the right to request deletion of your BookBuddys account, addresses, and order history.</p>
+          <p style="margin-top: 0.5rem;">To request deletion, email <strong>support@bookbuddys.in</strong> with subject "Account Deletion Request". All personal identifiers will be permanently expunged within 48 business hours.</p>
+        `;
+      }
+      modal.classList.add('active');
+    }
+    function closePolicyModal() {
+      document.getElementById('policyModal').classList.remove('active');
+    }
+  </script>
 </body>
 </html>

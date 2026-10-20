@@ -115,7 +115,7 @@ fun ShopPartnerAuthScreen(
                 // Brand Header
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "KidsG",
+                        text = "BookBuddys",
                         style = KidsGTypography.DisplaySmall.copy(
                             color = KidsGColors.OrangePrimary,
                             fontWeight = FontWeight.Black,

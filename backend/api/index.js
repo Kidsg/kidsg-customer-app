@@ -1,7 +1,9 @@
 // src/server.ts
 import express from "express";
 import cors from "cors";
-import { randomUUID as randomUUID6 } from "crypto";
+import path2 from "path";
+import { fileURLToPath } from "url";
+import { randomUUID as randomUUID7 } from "crypto";
 
 // src/config/env.ts
 import { z } from "zod";
@@ -191,6 +193,14 @@ import { randomUUID as randomUUID2 } from "crypto";
 
 // src/lib/db.ts
 import { randomUUID, scryptSync, randomBytes } from "crypto";
+function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 100) / 100;
+}
 var KidsGDatabase = class {
   categories = [];
   subcategories = [];
@@ -214,6 +224,31 @@ var KidsGDatabase = class {
   userCredentials = /* @__PURE__ */ new Map();
   orderStatusHistory = /* @__PURE__ */ new Map();
   payments = /* @__PURE__ */ new Map();
+  storeInventoryItems = /* @__PURE__ */ new Map();
+  // `${storeId}_${productId}` -> item
+  paymentSubmissions = /* @__PURE__ */ new Map();
+  // submissionId -> item
+  deliveryBookings = /* @__PURE__ */ new Map();
+  // orderId -> item
+  auditLogs = [];
+  platformSettings = {
+    merchantUpi: {
+      vpa: "bookbuddys@upi",
+      payeeName: "BookBuddys Stationery Depot",
+      qrEnabled: true
+    },
+    deliveryRules: {
+      defaultFee: 30,
+      freeDeliveryThreshold: 199,
+      maxRadiusKm: 12,
+      defaultEtaMinutes: 45
+    },
+    founderNotifications: {
+      notifyEmail: "veenithkumars31@gmail.com",
+      notifyPhone: "+919353919178",
+      channels: ["EMAIL", "IN_APP"]
+    }
+  };
   constructor() {
     this.seedInitialData();
   }
@@ -794,31 +829,170 @@ var KidsGDatabase = class {
     this.stores = [
       {
         id: "store_vidya_depot",
+        code: "BB-KOR-01",
         name: "Vidya Book & Stationery Depot",
+        ownerName: "Ramesh Kumar",
+        phone: "+91 98765 43210",
+        email: "vidya.depot@bookbuddys.in",
         address: "No. 42, 12th Main Road, 4th Block, Koramangala",
+        locality: "Koramangala 4th Block",
+        area: "South Bengaluru",
         city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "560034",
+        landmark: "Opposite Bethany High School Gate 2",
         latitude: 12.9352,
         longitude: 77.6245,
-        phone: "+91 80 2553 1234",
-        deliveryRadiusKm: 4.5,
+        deliveryRadiusKm: 6,
         isActive: true,
         openTime: "07:30",
-        closeTime: "21:30"
+        closeTime: "21:30",
+        categoriesSold: ["Notebooks & Registers", "Pens & Refills", "Geometry & Scales", "Art & Craft Colors", "Exam Essentials"],
+        founderNotes: "Premier verified partner store. Reliable stock of Classmate & Hauser. Direct contact: Ramesh Uncle.",
+        verificationStatus: "ACTIVE",
+        businessHours: {
+          monday: { open: "07:30", close: "21:30", isOpen: true },
+          tuesday: { open: "07:30", close: "21:30", isOpen: true },
+          wednesday: { open: "07:30", close: "21:30", isOpen: true },
+          thursday: { open: "07:30", close: "21:30", isOpen: true },
+          friday: { open: "07:30", close: "21:30", isOpen: true },
+          saturday: { open: "07:30", close: "22:00", isOpen: true },
+          sunday: { open: "09:00", close: "20:30", isOpen: true }
+        },
+        createdAt: "2026-08-01T09:00:00Z",
+        updatedAt: "2026-10-15T10:30:00Z"
       },
       {
         id: "store_campus_books",
-        name: "Campus Student Corner",
-        address: "Shop 7, 80 Feet Road, Indiranagar",
+        code: "BB-IND-02",
+        name: "Campus Student Corner & Books",
+        ownerName: "Kavitha Sundaram",
+        phone: "+91 98765 43211",
+        email: "campus.corner@bookbuddys.in",
+        address: "Shop 7, 80 Feet Road, HAL 2nd Stage, Indiranagar",
+        locality: "Indiranagar",
+        area: "East Bengaluru",
         city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "560038",
+        landmark: "Near Indiranagar Metro Station Exit B",
         latitude: 12.9716,
         longitude: 77.6412,
-        phone: "+91 80 2525 5678",
-        deliveryRadiusKm: 5,
+        deliveryRadiusKm: 6.5,
         isActive: true,
         openTime: "08:00",
-        closeTime: "22:00"
+        closeTime: "22:00",
+        categoriesSold: ["Pens & Refills", "Notebooks & Registers", "School Bags & Pouches", "Highlighters & Markers"],
+        founderNotes: "High volume student shop. Good for premium pens and art materials.",
+        verificationStatus: "ACTIVE",
+        businessHours: {
+          monday: { open: "08:00", close: "22:00", isOpen: true },
+          tuesday: { open: "08:00", close: "22:00", isOpen: true },
+          wednesday: { open: "08:00", close: "22:00", isOpen: true },
+          thursday: { open: "08:00", close: "22:00", isOpen: true },
+          friday: { open: "08:00", close: "22:00", isOpen: true },
+          saturday: { open: "08:00", close: "22:30", isOpen: true },
+          sunday: { open: "10:00", close: "20:00", isOpen: true }
+        },
+        createdAt: "2026-08-10T11:00:00Z",
+        updatedAt: "2026-10-16T14:15:00Z"
+      },
+      {
+        id: "store_malleshwaram_stationery",
+        code: "BB-MAL-03",
+        name: "Sri Vidya Book Centre & Stationery",
+        ownerName: "Anand Rao",
+        phone: "+91 98765 43212",
+        email: "srividya.mal@bookbuddys.in",
+        address: "No. 88, 8th Cross, Margosa Road, Malleshwaram",
+        locality: "Malleshwaram",
+        area: "North Bengaluru",
+        city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "560003",
+        landmark: "Near Malleshwaram Circle & KEB Circle",
+        latitude: 13.0035,
+        longitude: 77.5684,
+        deliveryRadiusKm: 5.5,
+        isActive: true,
+        openTime: "08:30",
+        closeTime: "21:30",
+        categoriesSold: ["Notebooks & Registers", "Geometry & Scales", "Exam Essentials", "Water Bottles & Lunch"],
+        founderNotes: "Historic central hub store with deep inventory of exam supplies and charts.",
+        verificationStatus: "ACTIVE",
+        businessHours: {
+          monday: { open: "08:30", close: "21:30", isOpen: true },
+          tuesday: { open: "08:30", close: "21:30", isOpen: true },
+          wednesday: { open: "08:30", close: "21:30", isOpen: true },
+          thursday: { open: "08:30", close: "21:30", isOpen: true },
+          friday: { open: "08:30", close: "21:30", isOpen: true },
+          saturday: { open: "08:30", close: "22:00", isOpen: true },
+          sunday: { open: "09:30", close: "19:30", isOpen: true }
+        },
+        createdAt: "2026-08-15T12:00:00Z",
+        updatedAt: "2026-10-18T09:40:00Z"
+      },
+      {
+        id: "store_jayanagar_books",
+        code: "BB-JAY-04",
+        name: "Jayanagar Student Emporium",
+        ownerName: "Suresh Patel",
+        phone: "+91 98765 43213",
+        email: "jayanagar.emporium@bookbuddys.in",
+        address: "Shop 14, BDA Complex, 4th Block, Jayanagar",
+        locality: "Jayanagar 4th Block",
+        area: "South Bengaluru",
+        city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "560011",
+        landmark: "Near Jayanagar BDA Shopping Complex 2nd Floor Entry",
+        latitude: 12.9299,
+        longitude: 77.5838,
+        deliveryRadiusKm: 6,
+        isActive: true,
+        openTime: "09:00",
+        closeTime: "21:30",
+        categoriesSold: ["All School Supplies", "Notebooks", "Stationery Bundles"],
+        founderNotes: "Excellent warehouse capacity and bulk registers stock.",
+        verificationStatus: "ACTIVE",
+        businessHours: {
+          monday: { open: "09:00", close: "21:30", isOpen: true },
+          tuesday: { open: "09:00", close: "21:30", isOpen: true },
+          wednesday: { open: "09:00", close: "21:30", isOpen: true },
+          thursday: { open: "09:00", close: "21:30", isOpen: true },
+          friday: { open: "09:00", close: "21:30", isOpen: true },
+          saturday: { open: "09:00", close: "22:00", isOpen: true },
+          sunday: { open: "10:00", close: "20:00", isOpen: true }
+        },
+        createdAt: "2026-09-01T10:00:00Z",
+        updatedAt: "2026-10-19T11:20:00Z"
       }
     ];
+    this.stores.forEach((store) => {
+      this.products.forEach((product) => {
+        const key = `${store.id}_${product.id}`;
+        const discountVar = store.id === "store_vidya_depot" ? product.discountPercent : Math.max(0, product.discountPercent - 2);
+        const sellPrice = discountVar > 0 ? Math.round(product.mrp * (1 - discountVar / 100)) : product.price;
+        const initialStock = Math.max(8, product.stock + (store.id === "store_vidya_depot" ? 10 : 0));
+        this.storeInventoryItems.set(key, {
+          id: `inv_${store.id.substring(6, 12)}_${product.id.substring(5, 15)}`,
+          storeId: store.id,
+          productId: product.id,
+          productName: product.name,
+          price: sellPrice,
+          mrp: product.mrp,
+          discountPercent: discountVar,
+          quantity: initialStock,
+          reservedQuantity: 0,
+          sellableQuantity: initialStock,
+          lowStockThreshold: 5,
+          isAvailable: true,
+          costPrice: Math.round(sellPrice * 0.72),
+          founderNotes: `Direct procurement from ${store.name}`,
+          lastVerifiedAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      });
+    });
     this.coupons = [
       {
         id: "coup_kidsg50",
@@ -899,6 +1073,44 @@ var KidsGDatabase = class {
       email: "aarav@kidsg.in",
       passwordHash: testHash,
       salt: testSalt
+    });
+    const founderProfile = {
+      id: "user_founder_01",
+      authUserId: "user_founder_01",
+      firstName: "Veenith",
+      lastName: "Kumar",
+      phone: "+91 9353919178",
+      email: "veenithkumars31@gmail.com",
+      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+      role: "ADMIN",
+      onboardingCompleted: true,
+      selectedClass: "Founder & CEO",
+      selectedSchool: "BookBuddys HQ Bengaluru",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.userProfiles.set("user_founder_01", founderProfile);
+    const veenithSalt = "bookbuddys_veenith_salt_2026";
+    const veenithHash = this.hashPassword("Veeniths31@", veenithSalt);
+    this.userCredentials.set("veenithkumars31@gmail.com", {
+      userId: "user_founder_01",
+      email: "veenithkumars31@gmail.com",
+      passwordHash: veenithHash,
+      salt: veenithSalt
+    });
+    const founderSalt = "bookbuddys_founder_salt_2026";
+    const founderHash = this.hashPassword("FounderPassword2026!", founderSalt);
+    this.userCredentials.set("founder@bookbuddys.in", {
+      userId: "user_founder_01",
+      email: "founder@bookbuddys.in",
+      passwordHash: founderHash,
+      salt: founderSalt
+    });
+    this.userCredentials.set("admin@bookbuddys.in", {
+      userId: "user_founder_01",
+      email: "admin@bookbuddys.in",
+      passwordHash: founderHash,
+      salt: founderSalt
     });
   }
   hashPassword(password, salt) {
@@ -1274,7 +1486,7 @@ var KidsGDatabase = class {
     return found;
   }
   // --- Order Operations with Snapshots & State Machine ---
-  createOrder(userId, addressId, paymentMethod = "UPI", couponCode, notes, clientItems, clientAddress) {
+  createOrder(userId, addressId, paymentMethod = "UPI", couponCode, notes, clientItems, clientAddress, initialStatus = "CONFIRMED") {
     if (clientItems && clientItems.length > 0) {
       for (const ci of clientItems) {
         let prod = this.getProductById(ci.productId);
@@ -1365,7 +1577,7 @@ var KidsGDatabase = class {
       userId,
       storeId: store.id,
       storeName: store.name,
-      status: "CONFIRMED",
+      status: initialStatus,
       subtotal: checkout.subtotal,
       discount: checkout.discount,
       couponDiscount: checkout.couponDiscount,
@@ -1373,9 +1585,9 @@ var KidsGDatabase = class {
       deliveryFee: checkout.deliveryFee,
       tax: checkout.tax,
       total: checkout.total,
-      paymentStatus: "SUCCESS",
+      paymentStatus: initialStatus === "ORDER_RECEIVED" ? "PENDING" : "SUCCESS",
       paymentMethod,
-      deliveryStatus: "ORDER_CONFIRMED",
+      deliveryStatus: initialStatus === "ORDER_RECEIVED" ? "ORDER_RECEIVED" : "ORDER_CONFIRMED",
       addressSnapshot: { ...address },
       items: orderItems,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -1413,29 +1625,51 @@ var KidsGDatabase = class {
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
   getOrderById(orderId, userId) {
-    const order = this.orders.get(orderId);
+    let order = this.orders.get(orderId);
+    if (!order) {
+      for (const o of this.orders.values()) {
+        if (o.orderNumber === orderId || o.id === orderId) {
+          order = o;
+          break;
+        }
+      }
+    }
     if (!order) return void 0;
-    if (order.userId === userId) {
+    if (!userId || order.userId === userId) {
       return order;
     }
     return void 0;
   }
-  getOrderByIdAdmin(orderId) {
-    return this.orders.get(orderId);
+  getOrderByIdAdmin(orderIdOrNumber) {
+    const direct = this.orders.get(orderIdOrNumber);
+    if (direct) return direct;
+    for (const o of this.orders.values()) {
+      if (o.orderNumber === orderIdOrNumber || o.id === orderIdOrNumber) {
+        return o;
+      }
+    }
+    return void 0;
   }
   // Order State Machine Validation with Status History
   transitionOrderStatus(orderId, targetStatus, message, createdBy = "SYSTEM") {
     const order = this.orders.get(orderId);
     if (!order) return { success: false, error: "Order not found" };
     const validTransitions = {
-      PENDING_PAYMENT: ["PAYMENT_CONFIRMED", "CONFIRMED", "CANCELLED"],
-      PAYMENT_CONFIRMED: ["CONFIRMED", "STORE_ACCEPTED", "CANCELLED", "REFUNDED"],
-      CONFIRMED: ["STORE_ACCEPTED", "PREPARING", "CANCELLED"],
-      STORE_ACCEPTED: ["PREPARING", "CANCELLED"],
+      PENDING_PAYMENT: ["PAYMENT_CONFIRMED", "PAYMENT_SUBMITTED", "CONFIRMED", "ORDER_RECEIVED", "CANCELLED"],
+      ORDER_RECEIVED: ["SHOP_CONFIRMED", "STORE_ACCEPTED", "CANCELLED"],
+      SHOP_CONFIRMED: ["PAYMENT_REQUIRED", "PAYMENT_SUBMITTED", "CANCELLED"],
+      STORE_ACCEPTED: ["PAYMENT_REQUIRED", "PAYMENT_SUBMITTED", "PREPARING", "CANCELLED"],
+      PAYMENT_REQUIRED: ["PAYMENT_SUBMITTED", "PAYMENT_VERIFIED", "PAYMENT_CONFIRMED", "CANCELLED"],
+      PAYMENT_SUBMITTED: ["PAYMENT_VERIFIED", "PAYMENT_CONFIRMED", "PAYMENT_REQUIRED", "CANCELLED"],
+      PAYMENT_CONFIRMED: ["CONFIRMED", "STORE_ACCEPTED", "SHOP_CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "CANCELLED", "REFUNDED"],
+      PAYMENT_VERIFIED: ["CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "CANCELLED", "REFUNDED"],
+      CONFIRMED: ["STORE_ACCEPTED", "SHOP_CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "CANCELLED"],
       PREPARING: ["READY_FOR_PICKUP", "CANCELLED"],
-      READY_FOR_PICKUP: ["PICKED_UP", "CANCELLED"],
-      PICKED_UP: ["OUT_FOR_DELIVERY"],
-      OUT_FOR_DELIVERY: ["DELIVERED"],
+      READY_FOR_PICKUP: ["DELIVERY_BOOKED", "DELIVERY_ASSIGNED", "PICKED_UP", "CANCELLED"],
+      DELIVERY_BOOKED: ["DELIVERY_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY", "CANCELLED"],
+      DELIVERY_ASSIGNED: ["PICKED_UP", "OUT_FOR_DELIVERY", "CANCELLED"],
+      PICKED_UP: ["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"],
+      OUT_FOR_DELIVERY: ["DELIVERED", "CANCELLED"],
       DELIVERED: [],
       CANCELLED: ["REFUNDED"],
       REFUNDED: []
@@ -1450,13 +1684,23 @@ var KidsGDatabase = class {
     order.status = targetStatus;
     order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     const defaultMessages = {
+      ORDER_RECEIVED: "Order request received and queued for confirmation",
+      SHOP_CONFIRMED: "Stationery availability confirmed by partner store",
+      PAYMENT_REQUIRED: "Availability confirmed! Payment is now due",
+      PAYMENT_SUBMITTED: "Payment reference submitted and under founder review",
+      PAYMENT_VERIFIED: "Payment verified! Preparing items for delivery",
+      PAYMENT_CONFIRMED: "Payment verified! Preparing items for delivery",
+      CONFIRMED: "Order confirmed and queued for fulfillment",
       STORE_ACCEPTED: "Shop has accepted your order",
       PREPARING: "Your stationery is being packed",
       READY_FOR_PICKUP: "Your order is ready for pickup",
+      DELIVERY_BOOKED: "Delivery partner has been booked",
+      DELIVERY_ASSIGNED: "Delivery partner has been assigned for pickup",
       PICKED_UP: "Order picked up by delivery partner",
       OUT_FOR_DELIVERY: "Your order is on the way",
       DELIVERED: "Delivered successfully to your address",
-      CANCELLED: "Order has been cancelled"
+      CANCELLED: "Order has been cancelled",
+      REFUNDED: "Payment has been refunded"
     };
     this.addOrderStatusHistory(
       orderId,
@@ -1642,6 +1886,714 @@ var KidsGDatabase = class {
   getSupportTicketById(id, userId) {
     return this.tickets.find((t) => (t.id === id || t.ticketNumber === id) && t.userId === userId);
   }
+  // --- Founder / Admin Shop Management ---
+  getStoresAdmin() {
+    return this.stores;
+  }
+  getStoreByIdAdmin(id) {
+    return this.stores.find((s) => s.id === id);
+  }
+  createStore(data, adminId = "user_founder_01") {
+    const storeId = data.id || `store_${randomUUID().substring(0, 8)}`;
+    const newStore = {
+      id: storeId,
+      code: data.code || `BB-SHP-${Math.floor(10 + Math.random() * 90)}`,
+      name: data.name || "New BookBuddys Partner Store",
+      ownerName: data.ownerName || "Store Manager",
+      phone: data.phone || "+91 98765 00000",
+      email: data.email || "partner@bookbuddys.in",
+      address: data.address || "Bengaluru, Karnataka",
+      locality: data.locality || "Bengaluru",
+      area: data.area || "Bengaluru",
+      city: data.city || "Bengaluru",
+      state: data.state || "Karnataka",
+      pincode: data.pincode || "560001",
+      landmark: data.landmark || "",
+      latitude: data.latitude || 12.9716,
+      longitude: data.longitude || 77.5946,
+      deliveryRadiusKm: data.deliveryRadiusKm || 6,
+      isActive: data.isActive !== void 0 ? data.isActive : true,
+      openTime: data.openTime || "08:00",
+      closeTime: data.closeTime || "21:30",
+      businessHours: data.businessHours || {
+        monday: { open: "08:00", close: "21:30", isOpen: true },
+        tuesday: { open: "08:00", close: "21:30", isOpen: true },
+        wednesday: { open: "08:00", close: "21:30", isOpen: true },
+        thursday: { open: "08:00", close: "21:30", isOpen: true },
+        friday: { open: "08:00", close: "21:30", isOpen: true },
+        saturday: { open: "08:00", close: "22:00", isOpen: true },
+        sunday: { open: "09:00", close: "20:00", isOpen: true }
+      },
+      categoriesSold: data.categoriesSold || ["Notebooks & Registers", "Pens & Refills", "Geometry & Scales"],
+      founderNotes: data.founderNotes || "",
+      verificationStatus: data.verificationStatus || "ACTIVE",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.stores.push(newStore);
+    this.products.forEach((p) => {
+      const key = `${storeId}_${p.id}`;
+      this.storeInventoryItems.set(key, {
+        id: `inv_${storeId.substring(0, 8)}_${p.id.substring(0, 8)}`,
+        storeId,
+        productId: p.id,
+        productName: p.name,
+        price: p.price,
+        mrp: p.mrp,
+        discountPercent: p.discountPercent,
+        quantity: 20,
+        reservedQuantity: 0,
+        sellableQuantity: 20,
+        lowStockThreshold: 5,
+        isAvailable: true,
+        costPrice: Math.round(p.price * 0.7),
+        founderNotes: `Initial stock for ${newStore.name}`,
+        lastVerifiedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    });
+    this.addAuditLog({
+      adminId,
+      action: "CREATE_SHOP",
+      entityType: "STORE",
+      entityId: storeId,
+      details: { name: newStore.name, address: newStore.address, coordinates: [newStore.latitude, newStore.longitude] }
+    });
+    return newStore;
+  }
+  updateStore(id, data, adminId = "user_founder_01") {
+    const store = this.getStoreById(id);
+    if (!store) return void 0;
+    Object.assign(store, data, { updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    this.addAuditLog({
+      adminId,
+      action: "UPDATE_SHOP",
+      entityType: "STORE",
+      entityId: id,
+      details: data
+    });
+    return store;
+  }
+  toggleStoreStatus(id, isActive, adminId = "user_founder_01") {
+    const store = this.getStoreById(id);
+    if (!store) return void 0;
+    store.isActive = isActive;
+    store.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    this.addAuditLog({
+      adminId,
+      action: isActive ? "ACTIVATE_SHOP" : "DEACTIVATE_SHOP",
+      entityType: "STORE",
+      entityId: id,
+      details: { isActive }
+    });
+    return store;
+  }
+  // --- Shop-Specific Inventory Management ---
+  getStoreInventory(storeId) {
+    const items = [];
+    this.products.forEach((p) => {
+      const key = `${storeId}_${p.id}`;
+      let item = this.storeInventoryItems.get(key);
+      if (!item) {
+        item = {
+          id: `inv_${storeId.substring(0, 6)}_${p.id.substring(0, 8)}`,
+          storeId,
+          productId: p.id,
+          productName: p.name,
+          price: p.price,
+          mrp: p.mrp,
+          discountPercent: p.discountPercent,
+          quantity: p.stock,
+          reservedQuantity: 0,
+          sellableQuantity: p.stock,
+          lowStockThreshold: 5,
+          isAvailable: p.isActive,
+          costPrice: Math.round(p.price * 0.7),
+          lastVerifiedAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        this.storeInventoryItems.set(key, item);
+      }
+      items.push(item);
+    });
+    return items;
+  }
+  getStoreInventoryItem(storeId, productId) {
+    return this.storeInventoryItems.get(`${storeId}_${productId}`);
+  }
+  updateStoreInventoryItem(storeId, productId, data, adminId = "user_founder_01") {
+    const key = `${storeId}_${productId}`;
+    let item = this.storeInventoryItems.get(key);
+    const product = this.getProductById(productId);
+    const priceVal = data.price ?? (data.pricePaise !== void 0 ? data.pricePaise / 100 : void 0);
+    const mrpVal = data.mrp ?? (data.mrpPaise !== void 0 ? data.mrpPaise / 100 : void 0);
+    const qtyVal = data.quantity ?? data.availableQuantity;
+    if (!item) {
+      const q = Math.max(0, qtyVal ?? 10);
+      const resQ = data.reservedQuantity ?? 0;
+      const sellQ = Math.max(0, q - resQ);
+      const p = priceVal ?? (product?.price || 50);
+      const m = mrpVal ?? (product?.mrp || 60);
+      item = {
+        id: `inv_${storeId.substring(0, 6)}_${productId.substring(0, 8)}`,
+        storeId,
+        productId,
+        productName: product?.name || "Stationery Product",
+        price: p,
+        pricePaise: Math.round(p * 100),
+        mrp: m,
+        mrpPaise: Math.round(m * 100),
+        discountPercent: data.discountPercent ?? (product?.discountPercent || 0),
+        quantity: q,
+        reservedQuantity: resQ,
+        sellableQuantity: sellQ,
+        availableQuantity: sellQ,
+        lowStockThreshold: data.lowStockThreshold ?? 5,
+        isAvailable: data.isAvailable ?? true,
+        costPrice: data.costPrice ?? (data.costPricePaise ? data.costPricePaise / 100 : void 0),
+        founderNotes: data.founderNotes,
+        lastVerifiedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } else {
+      const newQty = qtyVal !== void 0 ? Math.max(0, qtyVal) : item.quantity;
+      const newReserved = data.reservedQuantity !== void 0 ? Math.max(0, data.reservedQuantity) : item.reservedQuantity;
+      const newSellable = Math.max(0, newQty - newReserved);
+      const newPrice = priceVal !== void 0 ? priceVal : item.price;
+      const newMrp = mrpVal !== void 0 ? mrpVal : item.mrp;
+      Object.assign(item, data, {
+        price: newPrice,
+        pricePaise: Math.round(newPrice * 100),
+        mrp: newMrp,
+        mrpPaise: Math.round(newMrp * 100),
+        quantity: newQty,
+        reservedQuantity: newReserved,
+        sellableQuantity: newSellable,
+        availableQuantity: newSellable,
+        lastVerifiedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
+    this.storeInventoryItems.set(key, item);
+    this.addAuditLog({
+      adminId,
+      action: "UPDATE_INVENTORY",
+      entityType: "INVENTORY",
+      entityId: key,
+      details: { storeId, productId, ...data }
+    });
+    return item;
+  }
+  bulkUpdateStoreInventory(storeId, updates) {
+    let successCount = 0;
+    const errors = [];
+    updates.forEach((u, idx) => {
+      if (!u.productId) {
+        errors.push(`Row ${idx + 1}: Missing productId`);
+        return;
+      }
+      const q = u.quantity ?? u.availableQuantity;
+      if (q !== void 0 && q < 0) {
+        errors.push(`Row ${idx + 1}: Quantity cannot be negative`);
+        return;
+      }
+      const p = u.price ?? (u.pricePaise ? u.pricePaise / 100 : void 0);
+      if (p !== void 0 && p <= 0) {
+        errors.push(`Row ${idx + 1}: Price must be positive`);
+        return;
+      }
+      this.updateStoreInventoryItem(storeId, u.productId, u);
+      successCount++;
+    });
+    return { successCount, updatedCount: successCount, errors };
+  }
+  // --- Product Catalogue Management ---
+  getAllProductsAdmin() {
+    return this.products;
+  }
+  createProduct(data, adminId = "user_founder_01") {
+    const prodId = data.id || `prod_${randomUUID().substring(0, 8)}`;
+    const slug = data.slug || (data.name ? data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : prodId);
+    const newProd = {
+      id: prodId,
+      name: data.name || "New Stationery Item",
+      slug,
+      description: data.description || "Verified school supplies",
+      brand: data.brand || "BookBuddys Partner",
+      categoryId: data.categoryId || "cat_notebooks",
+      categoryName: data.categoryName,
+      subcategoryId: data.subcategoryId,
+      imageUrl: data.imageUrl || "https://images.unsplash.com/photo-1585336261026-775af4609c0d?w=500",
+      galleryImages: data.galleryImages || [],
+      price: data.price || 50,
+      mrp: data.mrp || 60,
+      discountPercent: data.discountPercent || 0,
+      stock: data.stock || 25,
+      unit: data.unit || "piece",
+      gradeLevel: data.gradeLevel || "All",
+      isFeatured: data.isFeatured || false,
+      isActive: data.isActive !== void 0 ? data.isActive : true,
+      specs: data.specs || {},
+      sku: data.sku || `SKU-${Math.floor(1e3 + Math.random() * 9e3)}`,
+      badgeText: data.badgeText
+    };
+    this.products.unshift(newProd);
+    this.stores.forEach((s) => {
+      this.updateStoreInventoryItem(s.id, prodId, {
+        price: newProd.price,
+        mrp: newProd.mrp,
+        discountPercent: newProd.discountPercent,
+        quantity: newProd.stock,
+        isAvailable: newProd.isActive
+      });
+    });
+    this.addAuditLog({
+      adminId,
+      action: "CREATE_PRODUCT",
+      entityType: "PRODUCT",
+      entityId: prodId,
+      details: { name: newProd.name, price: newProd.price, sku: newProd.sku }
+    });
+    return newProd;
+  }
+  updateProduct(id, data, adminId = "user_founder_01") {
+    const prod = this.getProductById(id);
+    if (!prod) return void 0;
+    Object.assign(prod, data);
+    this.addAuditLog({
+      adminId,
+      action: "UPDATE_PRODUCT",
+      entityType: "PRODUCT",
+      entityId: id,
+      details: data
+    });
+    return prod;
+  }
+  toggleProductStatus(id, isActive, adminId = "user_founder_01") {
+    const prod = this.getProductById(id);
+    if (!prod) return void 0;
+    prod.isActive = isActive;
+    this.addAuditLog({
+      adminId,
+      action: isActive ? "ACTIVATE_PRODUCT" : "DEACTIVATE_PRODUCT",
+      entityType: "PRODUCT",
+      entityId: id,
+      details: { isActive }
+    });
+    return prod;
+  }
+  // --- Location-Aware Discovery & Serviceability ---
+  findNearbyStores(lat, lng, maxDistanceKm = 12) {
+    const now = /* @__PURE__ */ new Date();
+    const currentHours = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const currentDay = days[now.getDay()];
+    return this.stores.filter((s) => s.isActive).map((store) => {
+      const distanceKm = calculateDistanceKm(lat, lng, store.latitude, store.longitude);
+      const radius = store.deliveryRadiusKm || maxDistanceKm;
+      const isWithinServiceArea = distanceKm <= radius;
+      let isOpenNow = true;
+      if (store.isOpenOverride !== void 0 && store.isOpenOverride !== null) {
+        isOpenNow = store.isOpenOverride;
+      } else if (store.businessHours && store.businessHours[currentDay]) {
+        const bh = store.businessHours[currentDay];
+        isOpenNow = bh.isOpen && currentHours >= bh.open && currentHours <= bh.close;
+      } else {
+        isOpenNow = currentHours >= store.openTime && currentHours <= store.closeTime;
+      }
+      return {
+        ...store,
+        distanceKm,
+        isWithinServiceArea,
+        isOpenNow
+      };
+    }).filter((s) => s.distanceKm <= (s.deliveryRadiusKm || maxDistanceKm)).sort((a, b) => {
+      if (a.isWithinServiceArea && !b.isWithinServiceArea) return -1;
+      if (!a.isWithinServiceArea && b.isWithinServiceArea) return 1;
+      if (a.isOpenNow && !b.isOpenNow) return -1;
+      if (!a.isOpenNow && b.isOpenNow) return 1;
+      return a.distanceKm - b.distanceKm;
+    });
+  }
+  getLocationEligibleProducts(lat, lng, categoryId, search) {
+    const customerLat = lat ?? 12.9358;
+    const customerLng = lng ?? 77.6251;
+    const nearbyStores = this.findNearbyStores(customerLat, customerLng);
+    const eligibleStore = nearbyStores.find((s) => s.isWithinServiceArea && s.isOpenNow) || nearbyStores[0];
+    const serviceable = eligibleStore ? eligibleStore.isWithinServiceArea : false;
+    let list = this.products.filter((p) => p.isActive);
+    if (categoryId) {
+      list = list.filter((p) => p.categoryId === categoryId || p.subcategoryId === categoryId);
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+    }
+    const productsWithShopPricing = list.map((prod) => {
+      const invKey = eligibleStore ? `${eligibleStore.id}_${prod.id}` : "";
+      const inv = invKey ? this.storeInventoryItems.get(invKey) : void 0;
+      const shopSellingPrice = inv ? inv.price : prod.price;
+      const shopStock = inv ? inv.sellableQuantity : prod.stock;
+      return {
+        ...prod,
+        price: shopSellingPrice,
+        shopSellingPrice,
+        shopStock,
+        fulfillmentStoreId: eligibleStore ? eligibleStore.id : "store_vidya_depot",
+        fulfillmentStoreName: eligibleStore ? eligibleStore.name : "Vidya Book & Stationery Depot",
+        distanceKm: eligibleStore ? eligibleStore.distanceKm : void 0,
+        inventory: inv || {
+          availableQuantity: shopStock,
+          lowStockThreshold: 5,
+          storeName: eligibleStore ? eligibleStore.name : "Bengaluru Store"
+        }
+      };
+    });
+    return {
+      products: productsWithShopPricing,
+      nearestStore: eligibleStore,
+      store: eligibleStore,
+      serviceable
+    };
+  }
+  // --- Order & Workflow Management ---
+  getAdminOrders(filters) {
+    let list = Array.from(this.orders.values());
+    if (filters?.storeId) {
+      list = list.filter((o) => o.storeId === filters.storeId);
+    }
+    if (filters?.status && filters.status !== "ALL") {
+      list = list.filter((o) => o.status === filters.status);
+    }
+    if (filters?.search && filters.search.trim()) {
+      const q = filters.search.trim().toLowerCase();
+      list = list.filter(
+        (o) => o.orderNumber.toLowerCase().includes(q) || (o.addressSnapshot?.name || "").toLowerCase().includes(q) || (o.addressSnapshot?.phone || "").includes(q)
+      );
+    }
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  // Step 3: Founder verifies shop availability
+  confirmOrderAvailability(orderId, action, notes, adminId = "user_founder_01") {
+    const order = this.orders.get(orderId);
+    if (!order) return { success: false, error: "Order not found" };
+    if (action === "CONFIRM") {
+      const res = this.transitionOrderStatus(
+        orderId,
+        "SHOP_CONFIRMED",
+        notes || "Founder confirmed availability with partner stationery store",
+        adminId
+      );
+      if (res.success && res.order) {
+        res.order.notes = notes ? `${res.order.notes ? res.order.notes + " | " : ""}[Avail Confirmed]: ${notes}` : res.order.notes;
+      }
+      this.addAuditLog({ adminId, action: "CONFIRM_AVAILABILITY", entityType: "ORDER", entityId: orderId, details: { notes } });
+      return res;
+    } else if (action === "REJECT") {
+      const res = this.transitionOrderStatus(
+        orderId,
+        "CANCELLED",
+        notes || "Item is currently unavailable at partner store",
+        adminId
+      );
+      this.addAuditLog({ adminId, action: "REJECT_AVAILABILITY", entityType: "ORDER", entityId: orderId, details: { notes } });
+      return res;
+    } else {
+      this.addOrderStatusHistory(orderId, order.status, `Substitution requested: ${notes || "Equivalent brand proposed"}`, adminId);
+      this.addAuditLog({ adminId, action: "SUBSTITUTION_PROPOSED", entityType: "ORDER", entityId: orderId, details: { notes } });
+      return { success: true, order };
+    }
+  }
+  // Step 4: Accept order & request payment
+  acceptOrderRequestPayment(orderId, adminId = "user_founder_01", notes) {
+    const res = this.transitionOrderStatus(
+      orderId,
+      "PAYMENT_REQUIRED",
+      notes || "Order accepted by founder. Payment is now due.",
+      adminId
+    );
+    this.addAuditLog({ adminId, action: "ACCEPT_ORDER_REQUEST_PAYMENT", entityType: "ORDER", entityId: orderId, details: { notes } });
+    return res;
+  }
+  // Step 5: Customer submits payment reference (UTR)
+  submitManualPayment(orderId, userId, data) {
+    const order = this.orders.get(orderId);
+    if (!order) return { success: false, error: "Order not found" };
+    const submissionId = `pay_sub_${randomUUID().substring(0, 8)}`;
+    const sub = {
+      id: submissionId,
+      orderId,
+      orderNumber: order.orderNumber,
+      userId,
+      amount: data.amount ?? order.total,
+      paymentMethod: "UPI",
+      transactionReference: data.transactionReference.trim(),
+      screenshotUrl: data.screenshotUrl,
+      status: "PENDING_VERIFICATION",
+      notes: data.notes,
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.paymentSubmissions.set(submissionId, sub);
+    this.transitionOrderStatus(
+      orderId,
+      "PAYMENT_SUBMITTED",
+      `Payment UTR ${sub.transactionReference} submitted for founder verification`,
+      "CUSTOMER"
+    );
+    return { success: true, submission: sub };
+  }
+  getPendingPayments() {
+    return Array.from(this.paymentSubmissions.values()).filter((p) => p.status === "PENDING_VERIFICATION").sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  }
+  getPaymentSubmissionById(id) {
+    return this.paymentSubmissions.get(id);
+  }
+  getPaymentSubmissionsForOrder(orderId) {
+    return Array.from(this.paymentSubmissions.values()).filter((p) => p.orderId === orderId);
+  }
+  // Step 6: Founder verifies payment
+  verifyManualPayment(submissionId, action, rejectionReason, adminId = "user_founder_01") {
+    const sub = this.paymentSubmissions.get(submissionId);
+    if (!sub) return { success: false, error: "Payment submission not found" };
+    const order = this.orders.get(sub.orderId);
+    if (!order) return { success: false, error: "Order not found" };
+    if (action === "VERIFY") {
+      sub.status = "VERIFIED";
+      sub.verifiedBy = adminId;
+      sub.verifiedAt = (/* @__PURE__ */ new Date()).toISOString();
+      sub.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      order.paymentStatus = "PAYMENT_VERIFIED";
+      order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.addPaymentRecord({
+        id: `pay_${randomUUID().substring(0, 8)}`,
+        orderId: order.id,
+        userId: order.userId,
+        amount: sub.amount,
+        currency: "INR",
+        provider: "UPI_MANUAL_VERIFIED",
+        transactionId: sub.transactionReference,
+        status: "SUCCESS",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      const res = this.transitionOrderStatus(
+        order.id,
+        "PAYMENT_VERIFIED",
+        `Payment of \u20B9${sub.amount} verified by founder (Ref: ${sub.transactionReference})`,
+        adminId
+      );
+      this.addAuditLog({
+        adminId,
+        action: "VERIFY_PAYMENT",
+        entityType: "PAYMENT",
+        entityId: submissionId,
+        details: { orderId: order.id, amount: sub.amount, utr: sub.transactionReference }
+      });
+      return res;
+    } else {
+      sub.status = "REJECTED";
+      sub.rejectionReason = rejectionReason || "Payment could not be verified in bank records";
+      sub.verifiedBy = adminId;
+      sub.verifiedAt = (/* @__PURE__ */ new Date()).toISOString();
+      sub.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.addOrderStatusHistory(
+        order.id,
+        "PAYMENT_REQUIRED",
+        `Payment rejected: ${sub.rejectionReason}. Please re-submit valid UTR or contact founder.`,
+        adminId
+      );
+      this.addAuditLog({
+        adminId,
+        action: "REJECT_PAYMENT",
+        entityType: "PAYMENT",
+        entityId: submissionId,
+        details: { reason: sub.rejectionReason, utr: sub.transactionReference }
+      });
+      return { success: true, order };
+    }
+  }
+  // Step 7: Founder purchases and prepares the items
+  markOrderProcuring(orderId, adminId = "user_founder_01", notes) {
+    const res = this.transitionOrderStatus(
+      orderId,
+      "PREPARING",
+      notes || "Items are being physically procured from store and packed",
+      adminId
+    );
+    this.addAuditLog({ adminId, action: "MARK_PREPARING", entityType: "ORDER", entityId: orderId, details: { notes } });
+    return res;
+  }
+  markOrderReadyForPickup(orderId, adminId = "user_founder_01", notes) {
+    const res = this.transitionOrderStatus(
+      orderId,
+      "READY_FOR_PICKUP",
+      notes || "Package packed and ready for delivery partner pickup",
+      adminId
+    );
+    this.addAuditLog({ adminId, action: "MARK_READY_FOR_PICKUP", entityType: "ORDER", entityId: orderId, details: { notes } });
+    return res;
+  }
+  // Step 8: Book delivery
+  bookDelivery(orderId, bookingData, adminId = "user_founder_01") {
+    const order = this.orders.get(orderId);
+    if (!order) return { success: false, error: "Order not found" };
+    const store = this.getStoreById(order.storeId) || this.stores[0];
+    const booking = {
+      id: `del_${randomUUID().substring(0, 8)}`,
+      orderId,
+      orderNumber: order.orderNumber,
+      provider: bookingData.provider || "PORTER",
+      bookingReference: bookingData.bookingReference || `PRT-${Math.floor(1e5 + Math.random() * 9e5)}`,
+      deliveryFee: bookingData.deliveryFee ?? 30,
+      riderName: bookingData.riderName || "Local Delivery Partner",
+      riderPhone: bookingData.riderPhone || "+91 99887 76655",
+      vehicleNumber: bookingData.vehicleNumber,
+      pickupAddressSnapshot: {
+        name: store.name,
+        address: store.address,
+        phone: store.phone,
+        latitude: store.latitude,
+        longitude: store.longitude
+      },
+      deliveryAddressSnapshot: order.addressSnapshot,
+      pickupStatus: "PENDING_PICKUP",
+      trackingUrl: bookingData.trackingUrl,
+      etaMinutes: bookingData.etaMinutes ?? 35,
+      founderNotes: bookingData.founderNotes,
+      bookedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.deliveryBookings.set(orderId, booking);
+    this.transitionOrderStatus(
+      orderId,
+      "DELIVERY_BOOKED",
+      `Delivery booked via ${booking.provider} (Ref: ${booking.bookingReference}). Rider: ${booking.riderName}`,
+      adminId
+    );
+    this.addAuditLog({
+      adminId,
+      action: "BOOK_DELIVERY",
+      entityType: "DELIVERY",
+      entityId: booking.id,
+      details: { orderId, provider: booking.provider, ref: booking.bookingReference }
+    });
+    return { success: true, booking };
+  }
+  getDeliveryBookingForOrder(orderId) {
+    return this.deliveryBookings.get(orderId);
+  }
+  // Step 9: Order Dispatch & Delivery Tracking Status Updates
+  updateDeliveryBookingStatus(orderId, status, details, adminId = "user_founder_01") {
+    const booking = this.deliveryBookings.get(orderId);
+    if (booking) {
+      booking.pickupStatus = status;
+      if (details?.riderName) booking.riderName = details.riderName;
+      if (details?.riderPhone) booking.riderPhone = details.riderPhone;
+      if (details?.etaMinutes) booking.etaMinutes = details.etaMinutes;
+      if (details?.trackingUrl) booking.trackingUrl = details.trackingUrl;
+      booking.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      if (status === "PICKED_UP") booking.pickedUpAt = (/* @__PURE__ */ new Date()).toISOString();
+      if (status === "DELIVERED") booking.deliveredAt = (/* @__PURE__ */ new Date()).toISOString();
+    }
+    let targetOrderStatus = "DELIVERY_BOOKED";
+    let message = "Delivery status updated";
+    if (status === "PICKED_UP") {
+      targetOrderStatus = "PICKED_UP";
+      message = `Package picked up by ${booking?.riderName || "delivery partner"}`;
+    } else if (status === "OUT_FOR_DELIVERY") {
+      targetOrderStatus = "OUT_FOR_DELIVERY";
+      message = `Package is on the way for delivery (ETA: ${booking?.etaMinutes || 25} mins)`;
+    } else if (status === "DELIVERED") {
+      targetOrderStatus = "DELIVERED";
+      message = "Package delivered successfully to customer address";
+    }
+    const res = this.transitionOrderStatus(orderId, targetOrderStatus, message, adminId);
+    this.addAuditLog({
+      adminId,
+      action: `DELIVERY_${status}`,
+      entityType: "DELIVERY",
+      entityId: orderId,
+      details: { status, ...details }
+    });
+    return res;
+  }
+  // Step 10: Cancellation & Refund Handling
+  cancelOrderAdmin(orderId, reason, adminId = "user_founder_01") {
+    const res = this.transitionOrderStatus(orderId, "CANCELLED", `Cancelled: ${reason}`, adminId);
+    this.addAuditLog({ adminId, action: "CANCEL_ORDER", entityType: "ORDER", entityId: orderId, details: { reason } });
+    return res;
+  }
+  refundOrderAdmin(orderId, refundRef, adminId = "user_founder_01") {
+    const order = this.orders.get(orderId);
+    if (!order) return { success: false, error: "Order not found" };
+    order.paymentStatus = "REFUNDED";
+    const res = this.transitionOrderStatus(orderId, "REFUNDED", `Refund processed (Ref: ${refundRef})`, adminId);
+    this.addAuditLog({ adminId, action: "REFUND_ORDER", entityType: "ORDER", entityId: orderId, details: { refundRef } });
+    return res;
+  }
+  // --- Audit Logs & Platform Settings ---
+  addAuditLog(entry) {
+    const log = {
+      ...entry,
+      id: `audit_${randomUUID().substring(0, 8)}`,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.auditLogs.unshift(log);
+    return log;
+  }
+  getAuditLogs(limit = 100) {
+    return this.auditLogs.slice(0, limit);
+  }
+  getPlatformSettings() {
+    return this.platformSettings;
+  }
+  updatePlatformSettings(settings, adminId = "user_founder_01") {
+    if (settings.merchantUpi) Object.assign(this.platformSettings.merchantUpi, settings.merchantUpi);
+    if (settings.deliveryRules) Object.assign(this.platformSettings.deliveryRules, settings.deliveryRules);
+    if (settings.founderNotifications) Object.assign(this.platformSettings.founderNotifications, settings.founderNotifications);
+    this.addAuditLog({
+      adminId,
+      action: "UPDATE_SETTINGS",
+      entityType: "SETTINGS",
+      entityId: "platform_settings",
+      details: settings
+    });
+    return this.platformSettings;
+  }
+  getAdminOverview() {
+    const allOrders = Array.from(this.orders.values());
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const todayOrders = allOrders.filter((o) => o.createdAt.startsWith(today)).length;
+    const awaitingStockConfirmation = allOrders.filter((o) => o.status === "ORDER_RECEIVED" || o.status === "PENDING_PAYMENT").length;
+    const awaitingPaymentVerification = Array.from(this.paymentSubmissions.values()).filter((p) => p.status === "PENDING_VERIFICATION").length;
+    const paidOrdersPreparing = allOrders.filter((o) => o.status === "PAYMENT_VERIFIED" || o.status === "PREPARING").length;
+    const awaitingDeliveryBooking = allOrders.filter((o) => o.status === "READY_FOR_PICKUP").length;
+    const outForDelivery = allOrders.filter((o) => o.status === "PICKED_UP" || o.status === "OUT_FOR_DELIVERY").length;
+    const completedOrders = allOrders.filter((o) => o.status === "DELIVERED").length;
+    const cancelledOrders = allOrders.filter((o) => o.status === "CANCELLED").length;
+    const completed = allOrders.filter((o) => o.status === "DELIVERED" || o.status === "PAYMENT_VERIFIED" || o.status === "CONFIRMED");
+    const totalSales = completed.reduce((sum, o) => sum + (o.total || 0), 0);
+    const pendingOrders = allOrders.filter((o) => o.status === "ORDER_RECEIVED" || o.status === "PAYMENT_REQUIRED" || o.status === "PAYMENT_SUBMITTED");
+    const pendingSales = pendingOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const activeShopsCount = this.stores.filter((s) => s.isActive).length;
+    const totalShopsCount = this.stores.length;
+    const lowStockCount = Array.from(this.storeInventoryItems.values()).filter((inv) => inv.sellableQuantity <= inv.lowStockThreshold).length;
+    const recentOrders = allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8);
+    return {
+      todayOrders: todayOrders || allOrders.length,
+      awaitingStockConfirmation,
+      awaitingPaymentVerification,
+      paidOrdersPreparing,
+      awaitingDeliveryBooking,
+      outForDelivery,
+      completedOrders,
+      cancelledOrders,
+      totalSalesPaise: totalSales * 100,
+      pendingSalesPaise: pendingSales * 100,
+      activeShopsCount,
+      totalShopsCount,
+      lowStockCount,
+      recentOrders
+    };
+  }
   clearTransactionalData() {
     this.orders.clear();
     this.orderStatusHistory.clear();
@@ -1650,6 +2602,9 @@ var KidsGDatabase = class {
     this.wishlists.clear();
     this.tickets = [];
     this.addresses.clear();
+    this.paymentSubmissions.clear();
+    this.deliveryBookings.clear();
+    this.auditLogs = [];
   }
 };
 var db = new KidsGDatabase();
@@ -1851,21 +2806,22 @@ async function syncOrderToSupabase(userEmail, order, clientAddress) {
     if (!orderDbId) return;
     for (const item of order.items) {
       let prodDbId = "b0000000-0000-0000-0000-000000000001";
-      const { data: prodData } = await supabaseAdmin.from("products").select("id").eq("slug", item.product?.slug || item.productId).maybeSingle();
+      const prodSlug = item.product?.slug || item.productId;
+      const { data: prodData } = await supabaseAdmin.from("products").select("id").eq("slug", prodSlug).maybeSingle();
       if (prodData?.id) {
         prodDbId = prodData.id;
       } else {
         const { data: catData } = await supabaseAdmin.from("categories").select("id").limit(1).maybeSingle();
         const catId = catData?.id || "c0000000-0000-0000-0000-000000000001";
         const { data: newProd } = await supabaseAdmin.from("products").insert({
-          name: item.product?.name || "Classmate Stationery",
-          slug: item.product?.slug || item.productId || `prod_${randomUUID2().substring(0, 8)}`,
+          name: item.product?.name || item.productName || "Classmate Stationery",
+          slug: prodSlug || `prod_${randomUUID2().substring(0, 8)}`,
           description: item.product?.description || "School stationery item",
           brand: item.product?.brand || "Classmate",
           category_id: catId,
           image_url: item.product?.imageUrl || "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500",
-          price: item.priceSnapshot || 95,
-          mrp: item.mrpSnapshot || 110,
+          price: item.priceSnapshot || item.price || 95,
+          mrp: item.mrpSnapshot || item.mrp || 110,
           discount_percent: 10,
           stock: 50,
           unit: "piece",
@@ -1877,11 +2833,11 @@ async function syncOrderToSupabase(userEmail, order, clientAddress) {
       await supabaseAdmin.from("order_items").insert({
         order_id: orderDbId,
         product_id: prodDbId,
-        product_name_snapshot: item.product?.name || "Stationery Item",
-        price_snapshot: item.priceSnapshot,
-        mrp_snapshot: item.mrpSnapshot,
+        product_name_snapshot: item.product?.name || item.productName || "Stationery Item",
+        price_snapshot: item.priceSnapshot || item.price,
+        mrp_snapshot: item.mrpSnapshot || item.mrp,
         quantity: item.quantity,
-        variant_snapshot: item.selectedVariant || null
+        variant_snapshot: item.selectedVariant || item.variant || null
       });
     }
     const { error: payErr } = await supabaseAdmin.from("payments").insert({
@@ -1937,9 +2893,13 @@ async function fetchUserOrdersFromSupabase(userEmail) {
       orderNumber: o.order_number,
       userId: o.user_id,
       storeId: o.store_id,
+      storeName: o.stores?.name || "Vidya Book & Stationery Depot",
       items: (o.order_items || []).map((oi) => ({
         id: oi.id,
         productId: oi.product_id,
+        productName: oi.product_name_snapshot || "Stationery Item",
+        price: Number(oi.price_snapshot || 0),
+        mrp: Number(oi.mrp_snapshot || 0),
         quantity: oi.quantity,
         priceSnapshot: Number(oi.price_snapshot),
         mrpSnapshot: Number(oi.mrp_snapshot),
@@ -2011,9 +2971,13 @@ async function fetchShopOrdersFromSupabase(storeId, statusFilter) {
       orderNumber: o.order_number,
       userId: o.user_id,
       storeId: o.store_id,
+      storeName: o.stores?.name || "Vidya Book & Stationery Depot",
       items: (o.order_items || []).map((oi) => ({
         id: oi.id,
         productId: oi.product_id,
+        productName: oi.product_name_snapshot || "Stationery Item",
+        price: Number(oi.price_snapshot || 0),
+        mrp: Number(oi.mrp_snapshot || 0),
         quantity: oi.quantity,
         priceSnapshot: Number(oi.price_snapshot),
         mrpSnapshot: Number(oi.mrp_snapshot),
@@ -2355,6 +3319,26 @@ function optionalAuth() {
         req.user = user;
       }
     }
+    next();
+  };
+}
+function requireRole(...allowedRoles) {
+  return async (req, res, next) => {
+    const token = extractBearerToken(req);
+    if (!token) {
+      sendError(res, "Authentication required", "UNAUTHORIZED", 401);
+      return;
+    }
+    const user = await parseToken(token);
+    if (!user) {
+      sendError(res, "Invalid or expired session token", "UNAUTHORIZED", 401);
+      return;
+    }
+    if (!allowedRoles.includes(user.role)) {
+      sendError(res, "You do not have permission to perform this action", "FORBIDDEN", 403);
+      return;
+    }
+    req.user = user;
     next();
   };
 }
@@ -3299,6 +4283,14 @@ router7.get("/products/recommended", (_req, res) => {
   const result = db.getProducts({ limit: 10 });
   sendSuccess(res, result.products);
 });
+router7.get("/products/location-eligible", (req, res) => {
+  const lat = req.query.latitude ? parseFloat(req.query.latitude) : void 0;
+  const lng = req.query.longitude ? parseFloat(req.query.longitude) : void 0;
+  const categoryId = req.query.category || req.query.categoryId;
+  const search = req.query.search || req.query.q;
+  const result = db.getLocationEligibleProducts(lat, lng, categoryId, search);
+  sendSuccess(res, result);
+});
 router7.get("/products/category/:categoryId", (req, res) => {
   const result = db.getProducts({ categoryId: String(req.params.categoryId), limit: 30 });
   sendSuccess(res, result.products);
@@ -3447,16 +4439,12 @@ var product_default = router7;
 // src/routes/store.ts
 import { Router as Router8 } from "express";
 var router8 = Router8();
-router8.get("/stores/nearby", (_req, res) => {
-  const stores = db.getStores();
-  const enriched = stores.map((s) => ({
-    ...s,
-    distanceKm: 0.8,
-    estimatedDeliveryMinutes: 12,
-    isOpen: true,
-    rating: 4.8
-  }));
-  sendSuccess(res, enriched);
+router8.get("/stores/nearby", (req, res) => {
+  const lat = req.query.latitude ? parseFloat(req.query.latitude) : 12.9358;
+  const lng = req.query.longitude ? parseFloat(req.query.longitude) : 77.6251;
+  const radius = req.query.radiusKm ? parseFloat(req.query.radiusKm) : 12;
+  const stores = db.findNearbyStores(lat, lng, radius);
+  sendSuccess(res, stores);
 });
 router8.get("/stores/:id", (req, res) => {
   const store = db.getStoreById(String(req.params.id));
@@ -4071,21 +5059,23 @@ var createOrderSchema = z10.object({
   })).optional(),
   deliveryAddress: z10.any().optional()
 });
-router13.post("/orders", requireAuth(), async (req, res) => {
+router13.post("/orders", optionalAuth(), async (req, res) => {
   const result = createOrderSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
     return;
   }
   const { addressId, paymentMethod, couponCode, notes, items, deliveryAddress } = result.data;
+  const userId = req.user?.id || "user_dev_default";
   const orderRes = db.createOrder(
-    req.user.id,
+    userId,
     addressId || "addr_default",
     paymentMethod,
     couponCode,
     notes,
     items,
-    deliveryAddress
+    deliveryAddress,
+    "ORDER_RECEIVED"
   );
   if (!orderRes.success || !orderRes.order) {
     sendError(res, orderRes.error || "Failed to place order", "ORDER_CREATION_FAILED", 400);
@@ -4099,17 +5089,17 @@ router13.post("/orders", requireAuth(), async (req, res) => {
     console.warn("[KidsG][Supabase] Order sync warning:", e?.message);
   }
   await notificationService2.send(
-    req.user.id,
+    userId,
     "ORDER_CONFIRMED",
     "Order Placed! \u{1F680}",
     `Your stationery order ${order.orderNumber} is confirmed and sent to the store.`,
     { orderId: order.id, orderNumber: order.orderNumber }
   );
   await notificationService2.send(
-    "shop_owner_vidya",
+    "user_founder_01",
     "NEW_ORDER",
-    "New KidsG order received \u{1F392}",
-    `Order #${order.orderNumber} (${order.items.length} items, \u20B9${order.total}) requires your attention.`,
+    "New BookBuddys Order Received! \u{1F392}",
+    `Order #${order.orderNumber} (\u20B9${order.total}) from ${order.addressSnapshot?.city || "Bengaluru"} requires stock confirmation.`,
     { orderId: order.id, orderNumber: order.orderNumber, storeId: order.storeId, total: order.total }
   );
   sendSuccess(res, order, "Order placed successfully", 201);
@@ -4180,6 +5170,105 @@ router13.get("/orders/:id/tracking", requireAuth(), async (req, res) => {
   sendSuccess(res, {
     ...tracking,
     timeline: persistedHistory
+  });
+});
+router13.post("/orders/:id/submit-payment", optionalAuth(), async (req, res) => {
+  const orderId = String(req.params.id);
+  const utr = req.body.transactionReference || req.body.utr || req.body.utrNumber;
+  const amount = req.body.amount ? Number(req.body.amount) : void 0;
+  const screenshotUrl = req.body.screenshotUrl;
+  const notes = req.body.notes || (req.body.paymentApp ? `App: ${req.body.paymentApp}` : void 0);
+  const userId = req.user?.id || "user_dev_default";
+  if (!utr || String(utr).trim().length < 6) {
+    sendError(res, "Valid UPI Transaction Reference (UTR / 12-digit Ref) is required", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const result = db.submitManualPayment(orderId, userId, {
+    transactionReference: String(utr),
+    amount,
+    screenshotUrl,
+    notes
+  });
+  if (!result.success) {
+    sendError(res, result.error || "Failed to submit payment", "PAYMENT_SUBMISSION_FAILED", 400);
+    return;
+  }
+  await notificationService2.send(
+    "user_founder_01",
+    "PAYMENT_SUBMITTED",
+    "Payment Verification Required \u{1F4B3}",
+    `Payment UTR ${utr} submitted for order. Please verify bank credit in Founder Dashboard.`,
+    { orderId, utr, amount }
+  );
+  const order = db.getOrderByIdAdmin(orderId);
+  sendSuccess(res, {
+    submission: result.submission,
+    order,
+    message: "Payment reference submitted successfully. Founder will verify bank credit shortly."
+  });
+});
+router13.get("/orders/:id/timeline", optionalAuth(), (req, res) => {
+  const orderId = String(req.params.id);
+  const order = db.getOrderByIdAdmin(orderId);
+  if (!order) {
+    sendError(res, "Order not found", "ORDER_NOT_FOUND", 404);
+    return;
+  }
+  const persistedHistory = db.getOrderStatusHistory(order.id);
+  const delivery = db.getDeliveryBookingForOrder(order.id);
+  const stepsDefinition = [
+    { step: 1, title: "Order Received", status: "ORDER_RECEIVED", desc: "Order request received and queued" },
+    { step: 2, title: "Shop Stock Confirmed", status: "SHOP_CONFIRMED", desc: "Partner shop confirmed inventory" },
+    { step: 3, title: "Payment Required", status: "PAYMENT_REQUIRED", desc: "Order accepted; payment due" },
+    { step: 4, title: "Payment Submitted", status: "PAYMENT_SUBMITTED", desc: "UPI reference submitted by customer" },
+    { step: 5, title: "Payment Verified", status: "PAID", desc: "Bank receipt confirmed by founder" },
+    { step: 6, title: "Items Procured & Ready", status: "ITEMS_PREPARED", desc: "Supplies packed and labelled" },
+    { step: 7, title: "Delivery Booked", status: "DELIVERY_BOOKED", desc: "Hyperlocal delivery partner assigned" },
+    { step: 8, title: "Picked Up", status: "PICKED_UP", desc: "Package collected from store" },
+    { step: 9, title: "Out for Delivery", status: "OUT_FOR_DELIVERY", desc: "Rider on way to delivery address" },
+    { step: 10, title: "Delivered", status: "DELIVERED", desc: "Delivered successfully" }
+  ];
+  const statusPriority = {
+    ORDER_RECEIVED: 1,
+    SHOP_CONFIRMED: 2,
+    PAYMENT_REQUIRED: 3,
+    PAYMENT_SUBMITTED: 4,
+    PAID: 5,
+    PAYMENT_VERIFIED: 5,
+    ITEMS_PREPARED: 6,
+    PREPARING: 6,
+    READY_FOR_PICKUP: 6,
+    DELIVERY_BOOKED: 7,
+    DELIVERY_ASSIGNED: 7,
+    PICKED_UP: 8,
+    OUT_FOR_DELIVERY: 9,
+    DELIVERED: 10,
+    CANCELLED: 0,
+    REFUNDED: 0
+  };
+  const currentPriority = statusPriority[order.status] ?? 1;
+  const timeline = stepsDefinition.map((s) => {
+    const isCompleted = currentPriority > s.step || currentPriority === 10 && s.step === 10;
+    const isCurrent = currentPriority === s.step;
+    const hist = persistedHistory.find((h) => h.status === s.status);
+    return {
+      step: s.step,
+      title: s.title,
+      description: s.desc,
+      isCompleted,
+      isCurrent,
+      timestamp: hist?.timestamp || (isCompleted ? order.createdAt : void 0)
+    };
+  });
+  sendSuccess(res, {
+    orderNumber: order.orderNumber,
+    currentStatus: order.status,
+    total: order.total,
+    storeName: order.storeName,
+    paymentStatus: order.paymentStatus,
+    timeline,
+    persistedHistory,
+    delivery
   });
 });
 var order_default = router13;
@@ -4823,7 +5912,523 @@ router15.get("/shop/notifications", async (req, res) => {
 });
 var shop_default = router15;
 
+// src/routes/admin.ts
+import { Router as Router16 } from "express";
+import { z as z13 } from "zod";
+import { randomUUID as randomUUID6 } from "crypto";
+var router16 = Router16();
+var notificationService5 = getNotificationService();
+var adminLoginSchema = z13.object({
+  email: z13.string().email(),
+  password: z13.string().min(6)
+});
+var createShopSchema = z13.object({
+  name: z13.string().min(2),
+  code: z13.string().optional(),
+  ownerName: z13.string().min(2),
+  phone: z13.string().min(10),
+  email: z13.string().email().optional(),
+  address: z13.string().min(5),
+  locality: z13.string().optional(),
+  area: z13.string().optional(),
+  city: z13.string().default("Bengaluru"),
+  state: z13.string().default("Karnataka"),
+  pincode: z13.string().min(6),
+  landmark: z13.string().optional(),
+  latitude: z13.number(),
+  longitude: z13.number(),
+  deliveryRadiusKm: z13.number().default(6),
+  openTime: z13.string().default("08:00"),
+  closeTime: z13.string().default("21:30"),
+  businessHours: z13.any().optional(),
+  categoriesSold: z13.array(z13.string()).optional(),
+  founderNotes: z13.string().optional(),
+  verificationStatus: z13.enum(["ACTIVE", "INACTIVE", "PENDING_REVIEW"]).default("ACTIVE")
+});
+var updateInventorySchema = z13.object({
+  price: z13.number().positive().optional(),
+  pricePaise: z13.number().positive().optional(),
+  mrp: z13.number().positive().optional(),
+  mrpPaise: z13.number().positive().optional(),
+  discountPercent: z13.number().min(0).max(100).optional(),
+  quantity: z13.number().min(0, "Quantity cannot be negative").optional(),
+  reservedQuantity: z13.number().min(0).optional(),
+  lowStockThreshold: z13.number().min(0).optional(),
+  isAvailable: z13.boolean().optional(),
+  costPrice: z13.number().positive().optional(),
+  costPricePaise: z13.number().positive().optional(),
+  founderNotes: z13.string().optional()
+});
+var createProductSchema = z13.object({
+  name: z13.string().min(2),
+  brand: z13.string().default("BookBuddys Partner"),
+  categoryId: z13.string(),
+  subcategoryId: z13.string().optional(),
+  description: z13.string().optional(),
+  imageUrl: z13.string().url(),
+  galleryImages: z13.array(z13.string()).optional(),
+  price: z13.number().positive(),
+  mrp: z13.number().positive(),
+  discountPercent: z13.number().min(0).max(100).default(0),
+  stock: z13.number().min(0).default(20),
+  unit: z13.string().default("piece"),
+  gradeLevel: z13.string().default("All"),
+  isFeatured: z13.boolean().default(false),
+  isActive: z13.boolean().default(true),
+  sku: z13.string().optional(),
+  badgeText: z13.string().optional(),
+  specs: z13.record(z13.string()).optional()
+});
+router16.post("/admin/auth/login", async (req, res) => {
+  const parsed = adminLoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, parsed.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const { email, password } = parsed.data;
+  const authRes = db.authenticateWithPassword(email.toLowerCase(), password);
+  if (!authRes.success || !authRes.user) {
+    sendError(res, "Invalid founder credentials or password", "INVALID_CREDENTIALS", 401);
+    return;
+  }
+  if (authRes.user.role !== "ADMIN") {
+    sendError(res, "Access denied: Admin/Founder credentials required", "FORBIDDEN", 403);
+    return;
+  }
+  const token = `kidsg-jwt-${authRes.user.id}`;
+  db.addAuditLog({
+    adminId: authRes.user.id,
+    adminName: `${authRes.user.firstName} ${authRes.user.lastName}`,
+    action: "ADMIN_LOGIN",
+    entityType: "SETTINGS",
+    entityId: authRes.user.id,
+    details: { email },
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"]
+  });
+  sendSuccess(res, {
+    token,
+    user: {
+      id: authRes.user.id,
+      email: authRes.user.email,
+      firstName: authRes.user.firstName,
+      lastName: authRes.user.lastName,
+      role: authRes.user.role
+    },
+    message: "Founder authentication successful"
+  });
+});
+router16.get("/admin/overview", requireRole("ADMIN"), (_req, res) => {
+  const overview = db.getAdminOverview();
+  sendSuccess(res, overview);
+});
+router16.get("/admin/shops", requireRole("ADMIN"), (_req, res) => {
+  const shops = db.getStoresAdmin();
+  sendSuccess(res, shops);
+});
+router16.post("/admin/shops", requireRole("ADMIN"), (req, res) => {
+  const parsed = createShopSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, parsed.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const adminId = req.user?.id || "user_founder_01";
+  const newShop = db.createStore(parsed.data, adminId);
+  sendSuccess(res, newShop, "Shop created successfully", 201);
+});
+router16.get("/admin/shops/:id", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.id);
+  const shop = db.getStoreByIdAdmin(shopId);
+  if (!shop) {
+    sendError(res, "Shop not found", "NOT_FOUND", 404);
+    return;
+  }
+  sendSuccess(res, shop);
+});
+router16.put("/admin/shops/:id", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.updateStore(shopId, req.body, adminId);
+  if (!updated) {
+    sendError(res, "Shop not found", "NOT_FOUND", 404);
+    return;
+  }
+  sendSuccess(res, updated);
+});
+router16.patch("/admin/shops/:id", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.updateStore(shopId, req.body, adminId);
+  if (!updated) {
+    sendError(res, "Shop not found", "NOT_FOUND", 404);
+    return;
+  }
+  sendSuccess(res, updated);
+});
+router16.delete("/admin/shops/:id", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.toggleStoreStatus(shopId, false, adminId);
+  if (!updated) {
+    sendError(res, "Shop not found", "NOT_FOUND", 404);
+    return;
+  }
+  sendSuccess(res, { message: "Shop successfully deactivated", shop: updated });
+});
+router16.get("/admin/shops/:shopId/inventory", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.shopId);
+  const inventory = db.getStoreInventory(shopId);
+  sendSuccess(res, inventory);
+});
+router16.post("/admin/shops/:shopId/inventory", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.shopId);
+  const productId = req.body.productId;
+  if (!productId) {
+    sendError(res, "productId is required", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const parsed = updateInventorySchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, parsed.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.updateStoreInventoryItem(shopId, productId, parsed.data, adminId);
+  sendSuccess(res, updated);
+});
+router16.put("/admin/shops/:shopId/inventory/:productId", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.shopId);
+  const productId = String(req.params.productId);
+  const parsed = updateInventorySchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, parsed.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.updateStoreInventoryItem(shopId, productId, parsed.data, adminId);
+  sendSuccess(res, updated);
+});
+router16.post("/admin/shops/:shopId/inventory/bulk", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.shopId);
+  const items = req.body.items;
+  if (!Array.isArray(items)) {
+    sendError(res, "Expected array of inventory items", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const result = db.bulkUpdateStoreInventory(shopId, items);
+  sendSuccess(res, result);
+});
+router16.post("/admin/shops/:shopId/inventory/bulk-csv", requireRole("ADMIN"), (req, res) => {
+  const shopId = String(req.params.shopId);
+  const items = req.body.items;
+  if (!Array.isArray(items)) {
+    sendError(res, "Expected array of inventory items", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const result = db.bulkUpdateStoreInventory(shopId, items);
+  sendSuccess(res, result);
+});
+router16.get("/admin/products", requireRole("ADMIN"), (_req, res) => {
+  const prods = db.getAllProductsAdmin();
+  sendSuccess(res, prods);
+});
+router16.post("/admin/products", requireRole("ADMIN"), (req, res) => {
+  const parsed = createProductSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, parsed.error.errors[0].message, "VALIDATION_ERROR", 400);
+    return;
+  }
+  const adminId = req.user?.id || "user_founder_01";
+  const newProd = db.createProduct(parsed.data, adminId);
+  sendSuccess(res, newProd, "Product created successfully", 201);
+});
+router16.put("/admin/products/:id", requireRole("ADMIN"), (req, res) => {
+  const prodId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.updateProduct(prodId, req.body, adminId);
+  if (!updated) {
+    sendError(res, "Product not found", "NOT_FOUND", 404);
+    return;
+  }
+  sendSuccess(res, updated);
+});
+router16.delete("/admin/products/:id", requireRole("ADMIN"), (req, res) => {
+  const prodId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.toggleProductStatus(prodId, false, adminId);
+  if (!updated) {
+    sendError(res, "Product not found", "NOT_FOUND", 404);
+    return;
+  }
+  sendSuccess(res, { message: "Product deactivated", product: updated });
+});
+router16.get("/admin/orders", requireRole("ADMIN"), (req, res) => {
+  const status = req.query.status;
+  const search = req.query.search;
+  const storeId = req.query.storeId;
+  const orders = db.getAdminOrders({ status, search, storeId });
+  sendSuccess(res, orders);
+});
+router16.get("/admin/orders/:id", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const order = db.getOrderByIdAdmin(orderId);
+  if (!order) {
+    sendError(res, "Order not found", "NOT_FOUND", 404);
+    return;
+  }
+  const history = db.getOrderStatusHistory(order.id);
+  const payments = db.getPaymentSubmissionsForOrder(order.id);
+  const booking = db.getDeliveryBookingForOrder(order.id);
+  sendSuccess(res, {
+    order,
+    history,
+    paymentSubmissions: payments,
+    deliveryBooking: booking
+  });
+});
+router16.post("/admin/orders/:id/availability", requireRole("ADMIN"), async (req, res) => {
+  const orderId = String(req.params.id);
+  const action = req.body.action;
+  const notes = req.body.notes;
+  const adminId = req.user?.id || "user_founder_01";
+  if (!action || !["CONFIRM", "REJECT", "SUBSTITUTE"].includes(action)) {
+    sendError(res, "Invalid availability action. Must be CONFIRM, REJECT, or SUBSTITUTE", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const result = db.confirmOrderAvailability(orderId, action, notes, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to update order availability", "STATE_ERROR", 400);
+    return;
+  }
+  if (result.order && action === "CONFIRM") {
+    await notificationService5.send(
+      result.order.userId,
+      "SHOP_CONFIRMED",
+      "Stock Confirmed! \u{1F392}",
+      `Partner store has confirmed stock for your order ${result.order.orderNumber}.`,
+      { orderId: result.order.id }
+    );
+  }
+  sendSuccess(res, { message: `Shop availability marked as ${action}`, order: result.order });
+});
+router16.post("/admin/orders/:id/accept-payment-due", requireRole("ADMIN"), async (req, res) => {
+  const orderId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const notes = req.body.notes;
+  const result = db.acceptOrderRequestPayment(orderId, adminId, notes);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to accept order", "STATE_ERROR", 400);
+    return;
+  }
+  if (result.order) {
+    await notificationService5.send(
+      result.order.userId,
+      "PAYMENT_REQUIRED",
+      "Payment Due - Order Accepted \u{1F4B3}",
+      `Order ${result.order.orderNumber} is confirmed! Please submit payment of \u20B9${result.order.total} via UPI.`,
+      { orderId: result.order.id, total: result.order.total }
+    );
+  }
+  sendSuccess(res, { message: "Order accepted. Payment is now requested from customer.", order: result.order });
+});
+router16.get("/admin/payments/pending", requireRole("ADMIN"), (_req, res) => {
+  const pending = db.getPendingPayments();
+  sendSuccess(res, pending);
+});
+router16.post("/admin/payments/:submissionId/verify", requireRole("ADMIN"), async (req, res) => {
+  const submissionId = String(req.params.submissionId);
+  const action = req.body.action;
+  const reason = req.body.reason;
+  const adminId = req.user?.id || "user_founder_01";
+  if (!action || !["VERIFY", "REJECT"].includes(action)) {
+    sendError(res, "Action must be VERIFY or REJECT", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const result = db.verifyManualPayment(submissionId, action, reason, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to verify payment", "VERIFICATION_ERROR", 400);
+    return;
+  }
+  if (result.order) {
+    await notificationService5.send(
+      result.order.userId,
+      action === "VERIFY" ? "PAYMENT_CONFIRMED" : "PAYMENT_FAILED",
+      action === "VERIFY" ? "Payment Verified! \u2705" : "Payment Needs Review \u26A0\uFE0F",
+      action === "VERIFY" ? `Payment for order ${result.order.orderNumber} is verified. We are preparing your supplies!` : `Payment could not be verified: ${reason || "Please check transaction reference"}.`,
+      { orderId: result.order.id }
+    );
+  }
+  sendSuccess(res, { message: `Payment ${action.toLowerCase()}ed successfully`, order: result.order });
+});
+router16.post("/admin/orders/:id/procure", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const notes = req.body.notes;
+  const result = db.markOrderProcuring(orderId, adminId, notes);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to transition to preparing", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Order marked as being procured & packed", order: result.order });
+});
+router16.post("/admin/orders/:id/ready", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const notes = req.body.notes;
+  const result = db.markOrderReadyForPickup(orderId, adminId, notes);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to transition to ready for pickup", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Order is ready for delivery pickup", order: result.order });
+});
+router16.post("/admin/orders/:id/book-delivery", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const result = db.bookDelivery(orderId, req.body, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to book delivery", "DELIVERY_ERROR", 400);
+    return;
+  }
+  const order = db.getOrderByIdAdmin(orderId);
+  sendSuccess(res, { message: "Delivery recorded successfully", booking: result.booking, order });
+});
+router16.post("/admin/orders/:id/delivery-status", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const status = req.body.status || req.body.deliveryStatus;
+  const adminId = req.user?.id || "user_founder_01";
+  if (!status || !["PICKED_UP", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status)) {
+    sendError(res, "Invalid delivery status", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const result = db.updateDeliveryBookingStatus(orderId, status, req.body, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to update delivery status", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: `Delivery status updated to ${status}`, order: result.order });
+});
+router16.post("/admin/orders/:id/confirm-availability", requireRole("ADMIN"), async (req, res) => {
+  const orderId = String(req.params.id);
+  const action = req.body.isAvailable === false ? "REJECT" : req.body.action || "CONFIRM";
+  const notes = req.body.notes || req.body.supplierNotes;
+  const adminId = req.user?.id || "user_founder_01";
+  const result = db.confirmOrderAvailability(orderId, action, notes, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to update order availability", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Shop availability confirmed", order: result.order });
+});
+router16.post("/admin/orders/:id/accept", requireRole("ADMIN"), async (req, res) => {
+  const orderId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const notes = req.body.notes;
+  const result = db.acceptOrderRequestPayment(orderId, adminId, notes);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to accept order", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Order accepted", order: result.order });
+});
+router16.post("/admin/orders/:id/verify-payment", requireRole("ADMIN"), async (req, res) => {
+  const orderId = String(req.params.id);
+  const verified = req.body.verified !== false;
+  const reason = req.body.notes || req.body.reason;
+  const adminId = req.user?.id || "user_founder_01";
+  const submissions = db.getPaymentSubmissionsForOrder(orderId);
+  if (submissions.length === 0) {
+    const order = db.getOrderByIdAdmin(orderId);
+    if (!order) {
+      sendError(res, "Order not found", "NOT_FOUND", 404);
+      return;
+    }
+    const sub = db.submitManualPayment(orderId, {
+      userId: order.userId,
+      amount: order.total,
+      paymentMethod: order.paymentMethod,
+      transactionReference: "AUTO_VERIFIED"
+    });
+    const result2 = db.verifyManualPayment(sub.id, verified ? "VERIFY" : "REJECT", reason, adminId);
+    sendSuccess(res, { message: "Payment verified", order: result2.order });
+    return;
+  }
+  const latestSub = submissions[0];
+  const result = db.verifyManualPayment(latestSub.id, verified ? "VERIFY" : "REJECT", reason, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to verify payment", "VERIFICATION_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Payment verified", order: result.order });
+});
+router16.post("/admin/orders/:id/mark-ready", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const adminId = req.user?.id || "user_founder_01";
+  const notes = req.body.notes;
+  const result = db.markOrderReadyForPickup(orderId, adminId, notes);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to mark ready", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Order ready for delivery", order: result.order });
+});
+router16.post("/admin/orders/:id/update-delivery-status", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const status = req.body.status || req.body.deliveryStatus;
+  const adminId = req.user?.id || "user_founder_01";
+  if (!status || !["PICKED_UP", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status)) {
+    sendError(res, "Invalid delivery status", "VALIDATION_ERROR", 400);
+    return;
+  }
+  const result = db.updateDeliveryBookingStatus(orderId, status, req.body, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to update delivery status", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: `Delivery status updated to ${status}`, order: result.order });
+});
+router16.post("/admin/orders/:id/cancel", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const reason = req.body.reason || "Cancelled by founder";
+  const adminId = req.user?.id || "user_founder_01";
+  const result = db.cancelOrderAdmin(orderId, reason, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to cancel order", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Order cancelled", order: result.order });
+});
+router16.post("/admin/orders/:id/refund", requireRole("ADMIN"), (req, res) => {
+  const orderId = String(req.params.id);
+  const refundRef = req.body.refundRef || `REF-${randomUUID6().substring(0, 8)}`;
+  const adminId = req.user?.id || "user_founder_01";
+  const result = db.refundOrderAdmin(orderId, refundRef, adminId);
+  if (!result.success) {
+    sendError(res, result.error || "Failed to process refund", "STATE_ERROR", 400);
+    return;
+  }
+  sendSuccess(res, { message: "Refund recorded successfully", order: result.order });
+});
+router16.get("/admin/audit-logs", requireRole("ADMIN"), (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit) : 100;
+  const logs = db.getAuditLogs(limit);
+  sendSuccess(res, logs);
+});
+router16.get("/admin/settings", requireRole("ADMIN"), (_req, res) => {
+  const settings = db.getPlatformSettings();
+  sendSuccess(res, settings);
+});
+router16.put("/admin/settings", requireRole("ADMIN"), (req, res) => {
+  const adminId = req.user?.id || "user_founder_01";
+  const updated = db.updatePlatformSettings(req.body, adminId);
+  sendSuccess(res, updated);
+});
+var admin_default = router16;
+
 // src/server.ts
+var __filename = fileURLToPath(import.meta.url);
+var __dirname = path2.dirname(__filename);
+var publicDir = path2.resolve(__dirname, "../public");
 var app = express();
 app.use(cors({
   origin: "*",
@@ -4832,7 +6437,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use((req, res, next) => {
-  const requestId = req.headers["x-request-id"] || `req_${randomUUID6().substring(0, 8)}`;
+  const requestId = req.headers["x-request-id"] || `req_${randomUUID7().substring(0, 8)}`;
   req.headers["x-request-id"] = requestId;
   res.setHeader("X-Request-Id", requestId);
   const start = Date.now();
@@ -4864,12 +6469,23 @@ app.use("/api", payment_default);
 app.use("/api", order_default);
 app.use("/api", notification_default);
 app.use("/api", shop_default);
+app.use("/api", admin_default);
+app.use(express.static(publicDir));
+app.get("/admin*", (_req, res) => {
+  res.sendFile(path2.join(publicDir, "admin", "index.html"));
+});
 app.get("/", (_req, res) => {
+  res.sendFile(path2.join(publicDir, "index.html"));
+});
+app.get("/api", (_req, res) => {
   res.json({
-    app: "KidsG API Server",
+    app: "BookBuddys Hyperlocal Commerce API",
+    brand: "BookBuddys",
     status: "online",
     version: "1.0.0",
-    docs: "/api/health"
+    adminDashboard: "/admin",
+    customerStorefront: "/",
+    health: "/api/health"
   });
 });
 app.use((_req, res) => {

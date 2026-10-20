@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { sendSuccess, sendError } from '../lib/response.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { getDeliveryTrackingService } from '../services/delivery/DeliveryTrackingService.js';
 import { getNotificationService } from '../services/notification/NotificationService.js';
 import { db } from '../lib/db.js';
@@ -28,7 +28,7 @@ const createOrderSchema = z.object({
 });
 
 // POST /api/orders
-router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
+router.post('/orders', optionalAuth(), async (req: Request, res: Response) => {
   const result = createOrderSchema.safeParse(req.body);
   if (!result.success) {
     sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
@@ -36,14 +36,16 @@ router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
   }
 
   const { addressId, paymentMethod, couponCode, notes, items, deliveryAddress } = result.data;
+  const userId = req.user?.id || 'user_dev_default';
   const orderRes = db.createOrder(
-    req.user!.id,
+    userId,
     addressId || 'addr_default',
     paymentMethod,
     couponCode,
     notes,
     items,
-    deliveryAddress
+    deliveryAddress,
+    'ORDER_RECEIVED'
   );
 
   if (!orderRes.success || !orderRes.order) {
@@ -63,19 +65,19 @@ router.post('/orders', requireAuth(), async (req: Request, res: Response) => {
 
   // Send notification to customer
   await notificationService.send(
-    req.user!.id,
+    userId,
     'ORDER_CONFIRMED',
     'Order Placed! 🚀',
     `Your stationery order ${order.orderNumber} is confirmed and sent to the store.`,
     { orderId: order.id, orderNumber: order.orderNumber }
   );
 
-  // Send persistent notification to shop owner
+  // Send persistent notification to founder/admin
   await notificationService.send(
-    'shop_owner_vidya',
+    'user_founder_01',
     'NEW_ORDER',
-    'New KidsG order received 🎒',
-    `Order #${order.orderNumber} (${order.items.length} items, ₹${order.total}) requires your attention.`,
+    'New BookBuddys Order Received! 🎒',
+    `Order #${order.orderNumber} (₹${order.total}) from ${order.addressSnapshot?.city || 'Bengaluru'} requires stock confirmation.`,
     { orderId: order.id, orderNumber: order.orderNumber, storeId: order.storeId, total: order.total }
   );
 
@@ -165,6 +167,122 @@ router.get('/orders/:id/tracking', requireAuth(), async (req: Request, res: Resp
   sendSuccess(res, {
     ...tracking,
     timeline: persistedHistory,
+  });
+});
+
+// POST /api/orders/:id/submit-payment (Customer submits UPI transaction reference / proof)
+router.post('/orders/:id/submit-payment', optionalAuth(), async (req: Request, res: Response) => {
+  const orderId = String(req.params.id);
+  const utr = req.body.transactionReference || req.body.utr || req.body.utrNumber;
+  const amount = req.body.amount ? Number(req.body.amount) : undefined;
+  const screenshotUrl = req.body.screenshotUrl;
+  const notes = req.body.notes || (req.body.paymentApp ? `App: ${req.body.paymentApp}` : undefined);
+  const userId = req.user?.id || 'user_dev_default';
+
+  if (!utr || String(utr).trim().length < 6) {
+    sendError(res, 'Valid UPI Transaction Reference (UTR / 12-digit Ref) is required', 'VALIDATION_ERROR', 400);
+    return;
+  }
+
+  const result = db.submitManualPayment(orderId, userId, {
+    transactionReference: String(utr),
+    amount,
+    screenshotUrl,
+    notes,
+  });
+
+  if (!result.success) {
+    sendError(res, result.error || 'Failed to submit payment', 'PAYMENT_SUBMISSION_FAILED', 400);
+    return;
+  }
+
+  // Notify founder that a payment requires verification
+  await notificationService.send(
+    'user_founder_01',
+    'PAYMENT_SUBMITTED',
+    'Payment Verification Required 💳',
+    `Payment UTR ${utr} submitted for order. Please verify bank credit in Founder Dashboard.`,
+    { orderId, utr, amount }
+  );
+
+  const order = db.getOrderByIdAdmin(orderId);
+
+  sendSuccess(res, {
+    submission: result.submission,
+    order,
+    message: 'Payment reference submitted successfully. Founder will verify bank credit shortly.',
+  });
+});
+
+// GET /api/orders/:id/timeline (Customer full 10-step order tracking journey)
+router.get('/orders/:id/timeline', optionalAuth(), (req: Request, res: Response) => {
+  const orderId = String(req.params.id);
+  const order = db.getOrderByIdAdmin(orderId);
+  if (!order) {
+    sendError(res, 'Order not found', 'ORDER_NOT_FOUND', 404);
+    return;
+  }
+
+  const persistedHistory = db.getOrderStatusHistory(order.id);
+  const delivery = db.getDeliveryBookingForOrder(order.id);
+
+  const stepsDefinition = [
+    { step: 1, title: 'Order Received', status: 'ORDER_RECEIVED', desc: 'Order request received and queued' },
+    { step: 2, title: 'Shop Stock Confirmed', status: 'SHOP_CONFIRMED', desc: 'Partner shop confirmed inventory' },
+    { step: 3, title: 'Payment Required', status: 'PAYMENT_REQUIRED', desc: 'Order accepted; payment due' },
+    { step: 4, title: 'Payment Submitted', status: 'PAYMENT_SUBMITTED', desc: 'UPI reference submitted by customer' },
+    { step: 5, title: 'Payment Verified', status: 'PAID', desc: 'Bank receipt confirmed by founder' },
+    { step: 6, title: 'Items Procured & Ready', status: 'ITEMS_PREPARED', desc: 'Supplies packed and labelled' },
+    { step: 7, title: 'Delivery Booked', status: 'DELIVERY_BOOKED', desc: 'Hyperlocal delivery partner assigned' },
+    { step: 8, title: 'Picked Up', status: 'PICKED_UP', desc: 'Package collected from store' },
+    { step: 9, title: 'Out for Delivery', status: 'OUT_FOR_DELIVERY', desc: 'Rider on way to delivery address' },
+    { step: 10, title: 'Delivered', status: 'DELIVERED', desc: 'Delivered successfully' },
+  ];
+
+  const statusPriority: Record<string, number> = {
+    ORDER_RECEIVED: 1,
+    SHOP_CONFIRMED: 2,
+    PAYMENT_REQUIRED: 3,
+    PAYMENT_SUBMITTED: 4,
+    PAID: 5,
+    PAYMENT_VERIFIED: 5,
+    ITEMS_PREPARED: 6,
+    PREPARING: 6,
+    READY_FOR_PICKUP: 6,
+    DELIVERY_BOOKED: 7,
+    DELIVERY_ASSIGNED: 7,
+    PICKED_UP: 8,
+    OUT_FOR_DELIVERY: 9,
+    DELIVERED: 10,
+    CANCELLED: 0,
+    REFUNDED: 0,
+  };
+
+  const currentPriority = statusPriority[order.status] ?? 1;
+
+  const timeline = stepsDefinition.map(s => {
+    const isCompleted = currentPriority > s.step || (currentPriority === 10 && s.step === 10);
+    const isCurrent = currentPriority === s.step;
+    const hist = persistedHistory.find(h => h.status === s.status);
+    return {
+      step: s.step,
+      title: s.title,
+      description: s.desc,
+      isCompleted,
+      isCurrent,
+      timestamp: hist?.timestamp || (isCompleted ? order.createdAt : undefined),
+    };
+  });
+
+  sendSuccess(res, {
+    orderNumber: order.orderNumber,
+    currentStatus: order.status,
+    total: order.total,
+    storeName: order.storeName,
+    paymentStatus: order.paymentStatus,
+    timeline,
+    persistedHistory,
+    delivery,
   });
 });
 

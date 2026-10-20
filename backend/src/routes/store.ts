@@ -5,17 +5,13 @@ import { db } from '../lib/db.js';
 const router = Router();
 
 // GET /api/stores/nearby
-router.get('/stores/nearby', (_req: Request, res: Response) => {
-  const stores = db.getStores();
-  // Enrich with live partner metrics
-  const enriched = stores.map(s => ({
-    ...s,
-    distanceKm: 0.8,
-    estimatedDeliveryMinutes: 12,
-    isOpen: true,
-    rating: 4.8,
-  }));
-  sendSuccess(res, enriched);
+router.get('/stores/nearby', (req: Request, res: Response) => {
+  const lat = req.query.latitude ? parseFloat(req.query.latitude as string) : 12.9358;
+  const lng = req.query.longitude ? parseFloat(req.query.longitude as string) : 77.6251;
+  const radius = req.query.radiusKm ? parseFloat(req.query.radiusKm as string) : 12.0;
+
+  const stores = db.findNearbyStores(lat, lng, radius);
+  sendSuccess(res, stores);
 });
 
 // GET /api/stores/:id

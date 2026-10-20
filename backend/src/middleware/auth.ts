@@ -13,6 +13,7 @@ export interface AuthenticatedUser {
   role: UserRole;
   firstName?: string;
   lastName?: string;
+  name?: string;
 }
 
 declare global {

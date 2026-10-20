@@ -17,6 +17,17 @@ router.get('/products/recommended', (_req: Request, res: Response) => {
   sendSuccess(res, result.products);
 });
 
+// GET /api/products/location-eligible (Location-aware shop stock & pricing)
+router.get('/products/location-eligible', (req: Request, res: Response) => {
+  const lat = req.query.latitude ? parseFloat(req.query.latitude as string) : undefined;
+  const lng = req.query.longitude ? parseFloat(req.query.longitude as string) : undefined;
+  const categoryId = (req.query.category as string) || (req.query.categoryId as string);
+  const search = (req.query.search as string) || (req.query.q as string);
+
+  const result = db.getLocationEligibleProducts(lat, lng, categoryId, search);
+  sendSuccess(res, result);
+});
+
 // GET /api/products/category/:categoryId
 router.get('/products/category/:categoryId', (req: Request, res: Response) => {
   const result = db.getProducts({ categoryId: String(req.params.categoryId), limit: 30 });

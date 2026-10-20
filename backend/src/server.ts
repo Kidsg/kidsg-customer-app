@@ -1,9 +1,15 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { env } from './config/env.js';
 import { Logger } from './lib/logger.js';
 import { sendError } from './lib/response.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicDir = path.resolve(__dirname, '../public');
 
 // Route Handlers
 import healthRoutes from './routes/health.js';
@@ -21,6 +27,7 @@ import paymentRoutes from './routes/payment.js';
 import orderRoutes from './routes/order.js';
 import notificationRoutes from './routes/notification.js';
 import shopRoutes from './routes/shop.js';
+import adminRoutes from './routes/admin.js';
 
 const app = express();
 
@@ -70,14 +77,31 @@ app.use('/api', paymentRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api', shopRoutes);
+app.use('/api', adminRoutes);
 
-// Root Health Fallback
+// Serve static frontend assets
+app.use(express.static(publicDir));
+
+// Serve Founder Control Panel at /admin
+app.get('/admin*', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'admin', 'index.html'));
+});
+
+// Serve Customer-facing storefront at /
 app.get('/', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+// API Info endpoint
+app.get('/api', (_req: Request, res: Response) => {
   res.json({
-    app: 'KidsG API Server',
+    app: 'BookBuddys Hyperlocal Commerce API',
+    brand: 'BookBuddys',
     status: 'online',
     version: '1.0.0',
-    docs: '/api/health',
+    adminDashboard: '/admin',
+    customerStorefront: '/',
+    health: '/api/health',
   });
 });
 

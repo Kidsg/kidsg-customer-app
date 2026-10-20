@@ -275,7 +275,7 @@ router.get('/shop/dashboard', async (req: Request, res: Response) => {
   const todayOrdersList = allOrders.filter(o => o.createdAt.startsWith(todayStr));
   const todayOrders = todayOrdersList.length;
   const todaySales = todayOrdersList
-    .filter(o => o.status !== 'CANCELLED' && o.status !== 'FAILED')
+    .filter(o => o.status !== 'CANCELLED' && (o.status as string) !== 'FAILED')
     .reduce((sum, o) => sum + (o.total || 0), 0);
 
   const pendingOrders = allOrders.filter(o => ['CONFIRMED', 'CREATED', 'SHOP_PENDING'].includes(o.status)).length;
@@ -312,7 +312,7 @@ router.get('/shop/earnings', async (req: Request, res: Response) => {
     allOrders = db.getShopOrders();
   }
 
-  const completed = allOrders.filter(o => o.status !== 'CANCELLED' && o.status !== 'FAILED');
+  const completed = allOrders.filter(o => o.status !== 'CANCELLED' && (o.status as string) !== 'FAILED');
   const totalEarnings = completed.reduce((sum, o) => sum + (o.total || 0), 0);
   const ordersCompleted = completed.length;
   const avgOrderValue = ordersCompleted > 0 ? Math.round(totalEarnings / ordersCompleted) : 0;

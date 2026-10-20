@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BookBuddys Founder Control Panel — Hyperlocal Commerce</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --bg-card-hover: rgba(30, 41, 59, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-focus: #6366f1;
+      --primary: #4f46e5;
+      --primary-light: #818cf8;
+      --primary-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      --accent: #f59e0b;
+      --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+      --success: #10b981;
+      --danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-glow: 0 0 25px rgba(79, 70, 229, 0.25);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.12) 0%, transparent 40%),
+                  radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
+                  var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      overflow-x: hidden;
+    }
+
+    /* Layout */
+    #sidebar {
+      width: 270px;
+      background: rgba(11, 15, 25, 0.95);
+      backdrop-filter: blur(16px);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      z-index: 100;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .brand-header {
+      padding: 24px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .brand-logo-icon {
+      width: 42px; height: 42px;
+      border-radius: 12px;
+      background: var(--primary-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+    }
+    .brand-title {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .nav-list {
+      padding: 16px 12px;
+      list-style: none;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      margin-bottom: 4px;
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.92rem;
+      transition: all 0.2s ease;
+    }
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: #ffffff;
+      transform: translateX(3px);
+    }
+    .nav-item.active {
+      background: var(--primary-gradient);
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+    }
+    .nav-badge {
+      margin-left: auto;
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .nav-badge.badge-amber {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .admin-profile-box {
+      padding: 16px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .admin-avatar {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: var(--primary-light);
+      border: 2px solid var(--primary);
+    }
+    .admin-info { flex: 1; min-width: 0; }
+    .admin-name { font-size: 0.88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .admin-role { font-size: 0.72rem; color: var(--success); font-weight: 600; }
+
+    /* Main Container */
+    #main-wrapper {
+      margin-left: 270px;
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header.topbar {
+      height: 72px;
+      background: rgba(11, 15, 25, 0.8);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 90;
+    }
+    .topbar-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .btn {
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary-gradient);
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border-color: var(--border-color);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .btn-success {
+      background: #059669;
+      color: #ffffff;
+    }
+    .btn-success:hover { background: #10b981; }
+    .btn-danger {
+      background: #dc2626;
+      color: #ffffff;
+    }
+    .btn-danger:hover { background: #ef4444; }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+
+    main.content-area {
+      padding: 32px;
+      flex: 1;
+    }
+
+    /* Cards & Containers */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-bottom: 24px;
+      transition: border-color 0.2s ease;
+    }
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: var(--primary-gradient);
+    }
+    .kpi-card.kpi-accent::before { background: var(--accent-gradient); }
+    .kpi-card.kpi-success::before { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    .kpi-card.kpi-danger::before { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); }
+    .kpi-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .kpi-value { font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; margin-top: 6px; }
+    .kpi-subtitle { font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
+
+    /* Tables */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: var(--radius-sm);
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+    table.data-table th {
+      padding: 14px 16px;
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+    table.data-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+    }
+    table.data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Badges */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .status-received { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .status-confirmed { background: rgba(139, 92, 246, 0.15); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .status-payment { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .status-verified { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-delivering { background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); }
+    .status-completed { background: rgba(16, 185, 129, 0.25); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .status-cancelled { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    /* Forms & Inputs */
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .form-control:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal-box {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 680px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      animation: modalSlide 0.25s ease-out;
+    }
+    @keyframes modalSlide {
+      from { opacity: 0; transform: translateY(20px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 14px;
+    }
+    .modal-title { font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; }
+
+    /* Map Element */
+    #mapPicker {
+      height: 280px;
+      width: 100%;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      margin-top: 10px;
+      z-index: 10;
+    }
+
+    /* Toasts */
+    #toastContainer {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast {
+      padding: 14px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #ffffff;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      animation: toastIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes toastIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .toast-success { background: #059669; border: 1px solid #10b981; }
+    .toast-error { background: #b91c1c; border: 1px solid #ef4444; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.open { transform: translateX(0); }
+      #main-wrapper { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="brand-header">
+      <div class="brand-logo-icon">📚</div>
+      <div>
+        <div class="brand-title">BookBuddys</div>
+        <div class="brand-subtitle">Founder Portal</div>
+      </div>
+    </div>
+
+    <ul class="nav-list">
+      <li class="nav-item active" onclick="switchTab('overview')">
+        <span>📊</span> Dashboard Overview
+      </li>
+      <li class="nav-item" onclick="switchTab('orders')">
+        <span>🎒</span> Orders & Workflow
+        <span class="nav-badge" id="pendingOrdersBadge">0</span>
+      </li>
+      <li class="nav-item" onclick="switchTab('payments')">
+        <span>💳</span> UPI Verification Queue
+        <span class="nav-badge badge-amber" id="pendingPaymentsBadge">0</span>
+      </li>
+      <li class="nav-item" onclick="switchTab('shops')">
+        <span>🏪</span> Shop Management
+      </li>
+      <li class="nav-item" onclick="switchTab('inventory')">
+        <span>📦</span> Shop Inventory & Stock
+      </li>
+      <li class="nav-item" onclick="switchTab('products')">
+        <span>🏷️</span> Product Catalogue
+      </li>
+      <li class="nav-item" onclick="switchTab('deliveries')">
+        <span>🛵</span> Delivery Coordination
+      </li>
+      <li class="nav-item" onclick="switchTab('audit')">
+        <span>🛡️</span> Security & Audit Logs
+      </li>
+      <li class="nav-item" onclick="switchTab('settings')">
+        <span>⚙️</span> Platform Settings
+      </li>
+    </ul>
+
+    <div class="admin-profile-box">
+      <div class="admin-avatar">F</div>
+      <div class="admin-info">
+        <div class="admin-name" id="adminUserDisplayName">Founder Admin</div>
+        <div class="admin-role">● Authorized Founder</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="logoutFounder()" title="Logout">🚪</button>
+    </div>
+  </aside>
+
+  <!-- Main Wrapper -->
+  <div id="main-wrapper">
+    <header class="topbar">
+      <div class="topbar-title" id="pageTitle">Dashboard Overview</div>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="fetchCurrentTabData()">
+          <span>🔄</span> Live Refresh
+        </button>
+        <span id="liveStatusIndicator" style="font-size: 0.78rem; color: var(--success); font-weight: 600;">
+          ● Connected (Bengaluru Hub)
+        </span>
+      </div>
+    </header>
+
+    <main class="content-area">
+
+      <!-- ================= 1. OVERVIEW TAB ================= -->
+      <section id="tab-overview" class="tab-content">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Today's Orders</div>
+            <div class="kpi-value" id="kpiTodayOrders">0</div>
+            <div class="kpi-subtitle">Bengaluru educational zones</div>
+          </div>
+          <div class="kpi-card kpi-accent">
+            <div class="kpi-label">Awaiting Stock Confirmation</div>
+            <div class="kpi-value" id="kpiAwaitingStock">0</div>
+            <div class="kpi-subtitle">Requires founder shop call</div>
+          </div>
+          <div class="kpi-card kpi-accent">
+            <div class="kpi-label">Awaiting Payment Verification</div>
+            <div class="kpi-value" id="kpiAwaitingPayment">0</div>
+            <div class="kpi-subtitle">Manual UPI UTR verification</div>
+          </div>
+          <div class="kpi-card kpi-success">
+            <div class="kpi-label">Verified Sales Today</div>
+            <div class="kpi-value" id="kpiTotalSales">₹0</div>
+            <div class="kpi-subtitle">Credited in merchant account</div>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Paid Orders Preparing</div>
+            <div class="kpi-value" id="kpiPreparingOrders">0</div>
+            <div class="kpi-subtitle">Physical procurement & packaging</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Awaiting Delivery Booking</div>
+            <div class="kpi-value" id="kpiAwaitingDelivery">0</div>
+            <div class="kpi-subtitle">Ready for Porter / Rapido</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Active Partner Shops</div>
+            <div class="kpi-value" id="kpiActiveShops">0</div>
+            <div class="kpi-subtitle">Live in Bengaluru clusters</div>
+          </div>
+          <div class="kpi-card kpi-danger">
+            <div class="kpi-label">Low Stock Alerts</div>
+            <div class="kpi-value" id="kpiLowStock">0</div>
+            <div class="kpi-subtitle">Below safety threshold</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Order Activity</div>
+            <button class="btn btn-secondary btn-sm" onclick="switchTab('orders')">View All Orders</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Order #</th>
+                  <th>Time</th>
+                  <th>Customer</th>
+                  <th>Delivery Locality</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="recentOrdersTbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-dim);">Loading live orders...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 2. ORDERS & WORKFLOW TAB ================= -->
+      <section id="tab-orders" class="tab-content" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Order Fulfillment Control Center</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                10-Step Hyperlocal State Machine: Request → Stock Check → Payment Due → UTR Verify → Procure → Ready → Book Delivery → Out for Delivery → Delivered
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <select class="form-control" id="orderFilterStatus" onchange="loadOrdersTable()" style="width: auto;">
+                <option value="ALL">All Statuses</option>
+                <option value="ORDER_RECEIVED">Awaiting Stock Confirmation</option>
+                <option value="SHOP_CONFIRMED">Stock Confirmed</option>
+                <option value="PAYMENT_REQUIRED">Payment Due</option>
+                <option value="PAYMENT_SUBMITTED">Payment Under Verification</option>
+                <option value="PAYMENT_VERIFIED">Payment Verified (Paid)</option>
+                <option value="PREPARING">Procuring / Packing</option>
+                <option value="READY_FOR_PICKUP">Ready for Delivery Booking</option>
+                <option value="DELIVERY_BOOKED">Delivery Booked</option>
+                <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Order #</th>
+                  <th>Customer & Address</th>
+                  <th>Fulfillment Shop</th>
+                  <th>Items Summary</th>
+                  <th>Total</th>
+                  <th>Payment Status</th>
+                  <th>Order Status</th>
+                  <th>Operational Action</th>
+                </tr>
+              </thead>
+              <tbody id="allOrdersTbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-dim);">Loading orders...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 3. UPI VERIFICATION QUEUE ================= -->
+      <section id="tab-payments" class="tab-content" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Manual UPI Payment Verification Queue</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                Strict Founder Verification: Verify actual bank credit before moving orders to procurement.
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Submission ID</th>
+                  <th>Order #</th>
+                  <th>Submitted At</th>
+                  <th>Expected Amount</th>
+                  <th>Submitted UTR / Reference</th>
+                  <th>Proof Attachment</th>
+                  <th>Verification Status</th>
+                  <th>Founder Actions</th>
+                </tr>
+              </thead>
+              <tbody id="pendingPaymentsTbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-dim);">No pending payments awaiting verification.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 4. SHOPS MANAGEMENT TAB ================= -->
+      <section id="tab-shops" class="tab-content" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Stationery Partner Stores (Bengaluru)</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                Manage verified stationery depots, coordinates, business hours, and service radius.
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openShopModal()">+ Add New Shop</button>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Shop Name</th>
+                  <th>Owner / Contact</th>
+                  <th>Locality & Address</th>
+                  <th>Coordinates (Lat, Lng)</th>
+                  <th>Radius</th>
+                  <th>Hours</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="shopsTableTbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Loading partner shops...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 5. INVENTORY & STOCK TAB ================= -->
+      <section id="tab-inventory" class="tab-content" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Shop-Specific Inventory & Pricing Manager</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                Formula: Available Sellable Stock = Physical Stock − Reserved Stock. Negative stock strictly prevented.
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <select class="form-control" id="inventoryShopSelector" onchange="loadInventoryTable()" style="width: auto;">
+                <option value="">Select Shop...</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="downloadCsvTemplate()">📥 CSV Template</button>
+              <button class="btn btn-secondary btn-sm" onclick="triggerCsvUpload()">📤 Import CSV</button>
+              <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="handleCsvFileSelected(event)">
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Product Name</th>
+                  <th>Category</th>
+                  <th>Selling Price (₹)</th>
+                  <th>MRP (₹)</th>
+                  <th>Physical Stock</th>
+                  <th>Reserved</th>
+                  <th>Sellable Stock</th>
+                  <th>Threshold</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryTableTbody">
+                <tr><td colspan="10" style="text-align: center; color: var(--text-dim);">Select a shop to manage inventory.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 6. PRODUCT CATALOGUE TAB ================= -->
+      <section id="tab-products" class="tab-content" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Master Product Catalogue</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                Central stationery items taxonomy shared across all eligible shops.
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Add New Product</button>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Photo</th>
+                  <th>Product Name & Brand</th>
+                  <th>Category</th>
+                  <th>Base Price</th>
+                  <th>MRP</th>
+                  <th>Unit</th>
+                  <th>SKU</th>
+                  <th>Active</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="productsTableTbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Loading products...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 7. DELIVERIES TAB ================= -->
+      <section id="tab-deliveries" class="tab-content" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Hyperlocal Delivery Coordinator</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                Manual booking workflow with Porter, Rapido, Dunzo or in-house runner support.
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Order #</th>
+                  <th>Provider</th>
+                  <th>Booking Ref</th>
+                  <th>Rider Name & Phone</th>
+                  <th>Pickup Depot</th>
+                  <th>Delivery Address</th>
+                  <th>Fee</th>
+                  <th>Pickup Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="deliveriesTableTbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Loading delivery bookings...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 8. AUDIT LOG TAB ================= -->
+      <section id="tab-audit" class="tab-content" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Security & Privileged Operation Audit Logs</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+                Immutable trail of founder actions: price adjustments, payment approvals, cancellations.
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Action</th>
+                  <th>Entity Type</th>
+                  <th>Entity ID</th>
+                  <th>Admin ID</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="auditLogsTbody">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Loading audit logs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 9. PLATFORM SETTINGS TAB ================= -->
+      <section id="tab-settings" class="tab-content" style="display: none;">
+        <div class="card" style="max-width: 700px;">
+          <div class="card-header">
+            <div class="card-title">Platform & Payment Settings</div>
+          </div>
+          <form onsubmit="savePlatformSettings(event)">
+            <div class="form-group">
+              <label class="form-label">Merchant UPI VPA (Payee Address)</label>
+              <input type="text" class="form-control" id="settingUpiVpa" value="bookbuddys@upi" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Merchant Display Name</label>
+              <input type="text" class="form-control" id="settingPayeeName" value="BookBuddys Stationery Depot" required>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Default Delivery Fee (₹)</label>
+                <input type="number" class="form-control" id="settingDeliveryFee" value="30" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Free Delivery Threshold (₹)</label>
+                <input type="number" class="form-control" id="settingFreeThreshold" value="199" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Max Service Radius (Km)</label>
+                <input type="number" class="form-control" id="settingMaxRadius" value="12" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default Delivery ETA (Mins)</label>
+                <input type="number" class="form-control" id="settingDefaultEta" value="45" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Founder Notification Email</label>
+              <input type="email" class="form-control" id="settingNotifyEmail" value="veenithkumars31@gmail.com" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+          </form>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- 1. Shop Create / Edit Modal with Leaflet Map Pin Picker -->
+  <div class="modal-backdrop" id="shopModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="shopModalTitle">Add Stationery Partner Shop</div>
+        <button class="modal-close" onclick="closeModal('shopModal')">&times;</button>
+      </div>
+      <form onsubmit="saveShopForm(event)">
+        <input type="hidden" id="shopFormId">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Shop Name *</label>
+            <input type="text" class="form-control" id="shopFormName" placeholder="e.g. Vidya Book Depot" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unique Code</label>
+            <input type="text" class="form-control" id="shopFormCode" placeholder="e.g. BB-KOR-01">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Owner / Contact Person *</label>
+            <input type="text" class="form-control" id="shopFormOwner" placeholder="e.g. Ramesh Kumar" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number *</label>
+            <input type="text" class="form-control" id="shopFormPhone" placeholder="+91 98765 43210" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Full Postal Address *</label>
+          <input type="text" class="form-control" id="shopFormAddress" placeholder="Shop #, Street, Block, PIN" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Locality / Neighbourhood</label>
+            <input type="text" class="form-control" id="shopFormLocality" placeholder="e.g. Koramangala 4th Block">
+          </div>
+          <div class="form-group">
+            <label class="form-label">PIN Code *</label>
+            <input type="text" class="form-control" id="shopFormPincode" placeholder="560034" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Map Location (Drag pin to exact shop entrance)</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+            <input type="text" class="form-control" id="mapSearchInput" placeholder="Search Bengaluru area to center map...">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="searchMapPlace()">Search Place</button>
+          </div>
+          <div id="mapPicker"></div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">
+            Selected Coordinates: <strong id="selectedCoordsText">12.9352, 77.6245</strong>
+          </div>
+          <input type="hidden" id="shopFormLat" value="12.9352">
+          <input type="hidden" id="shopFormLng" value="77.6245">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Delivery Service Radius (Km)</label>
+            <input type="number" step="0.5" class="form-control" id="shopFormRadius" value="6.0" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Operating Hours</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="time" class="form-control" id="shopFormOpen" value="08:00">
+              <input type="time" class="form-control" id="shopFormClose" value="21:30">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Founder Internal Notes (Hidden from customers)</label>
+          <textarea class="form-control" id="shopFormNotes" rows="2" placeholder="Key contact person, terms, stock reliability..."></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('shopModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Shop</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Product Create / Edit Modal -->
+  <div class="modal-backdrop" id="productModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="productModalTitle">Add Stationery Product</div>
+        <button class="modal-close" onclick="closeModal('productModal')">&times;</button>
+      </div>
+      <form onsubmit="saveProductForm(event)">
+        <input type="hidden" id="prodFormId">
+        <div class="form-group">
+          <label class="form-label">Product Title *</label>
+          <input type="text" class="form-control" id="prodFormName" placeholder="e.g. Classmate Pulse A4 Spiral Notebook" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Brand</label>
+            <input type="text" class="form-control" id="prodFormBrand" placeholder="Classmate / Hauser / Cello">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category *</label>
+            <select class="form-control" id="prodFormCategory" required>
+              <option value="cat_notebooks">Notebooks & Registers</option>
+              <option value="cat_pens">Pens & Refills</option>
+              <option value="cat_pencils">Pencils & Erasers</option>
+              <option value="cat_geometry">Geometry & Scales</option>
+              <option value="cat_art">Art & Craft Colors</option>
+              <option value="cat_exam">Exam Essentials</option>
+              <option value="cat_bags">School Bags & Pouches</option>
+              <option value="cat_bottles">Water Bottles & Lunch</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Selling Price (₹) *</label>
+            <input type="number" class="form-control" id="prodFormPrice" placeholder="95" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">MRP (₹) *</label>
+            <input type="number" class="form-control" id="prodFormMrp" placeholder="110" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stock Units</label>
+            <input type="number" class="form-control" id="prodFormStock" value="30" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Primary Image URL *</label>
+          <input type="url" class="form-control" id="prodFormImageUrl" placeholder="https://images.unsplash.com/..." required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Product Description</label>
+          <textarea class="form-control" id="prodFormDescription" rows="2"></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('productModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Delivery Booking Modal (Step 8) -->
+  <div class="modal-backdrop" id="deliveryModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">Book Manual Delivery (Porter / Rapido)</div>
+        <button class="modal-close" onclick="closeModal('deliveryModal')">&times;</button>
+      </div>
+      <form onsubmit="submitDeliveryBooking(event)">
+        <input type="hidden" id="deliveryModalOrderId">
+        <div class="form-group">
+          <label class="form-label">Delivery Provider</label>
+          <select class="form-control" id="deliveryModalProvider">
+            <option value="PORTER">Porter (2-Wheeler / 3-Wheeler)</option>
+            <option value="RAPIDO">Rapido Local Delivery</option>
+            <option value="DUNZO">Dunzo Direct</option>
+            <option value="IN_HOUSE">BookBuddys Direct Runner</option>
+            <option value="MANUAL">Manual Local Courier</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Booking Reference / Ride ID</label>
+            <input type="text" class="form-control" id="deliveryModalRef" placeholder="e.g. PRT-984210" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Delivery Fee Paid (₹)</label>
+            <input type="number" class="form-control" id="deliveryModalFee" value="35" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Rider Name</label>
+            <input type="text" class="form-control" id="deliveryModalRiderName" placeholder="e.g. Mahesh K">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rider Phone</label>
+            <input type="text" class="form-control" id="deliveryModalRiderPhone" placeholder="+91 99887 76655">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estimated Delivery (Minutes)</label>
+          <input type="number" class="form-control" id="deliveryModalEta" value="30">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('deliveryModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Confirm Booking</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Login Modal for unauthorized users -->
+  <div class="modal-backdrop" id="loginModal">
+    <div class="modal-box" style="max-width: 420px; text-align: center;">
+      <div style="font-size: 40px; margin-bottom: 12px;">🔐</div>
+      <div class="modal-title" style="margin-bottom: 8px;">Founder Login Required</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
+        Access restricted to authorized BookBuddys administrators.
+      </p>
+      <form onsubmit="handleFounderLogin(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label">Founder Email</label>
+          <input type="email" class="form-control" id="loginEmail" value="veenithkumars31@gmail.com" required>
+        </div>
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-control" id="loginPassword" value="Veeniths31@" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 10px;">
+          Authenticate Founder
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <script>
+    // Configuration
+    const API_BASE = window.location.origin + '/api';
+    let currentAuthToken = localStorage.getItem('bb_admin_token') || 'kidsg-jwt-user_founder_01';
+    let currentTab = 'overview';
+    let leafletMap = null;
+    let mapMarker = null;
+
+    // Toast Notifications
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.innerHTML = `<span>${type === 'success' ? '✓' : '⚠️'}</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    }
+
+    // Authenticated API Fetch Helper
+    async function apiRequest(endpoint, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentAuthToken}`,
+        ...options.headers,
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+        const json = await res.json();
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            document.getElementById('loginModal').classList.add('show');
+          }
+          throw new Error(json.message || 'API request failed');
+        }
+        return json.data;
+      } catch (err) {
+        showToast(err.message, 'error');
+        throw err;
+      }
+    }
+
+    // Login Handler
+    async function handleFounderLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Authentication failed');
+
+        currentAuthToken = json.data.token;
+        localStorage.setItem('bb_admin_token', currentAuthToken);
+        document.getElementById('adminUserDisplayName').textContent = `${json.data.user.firstName} ${json.data.user.lastName}`;
+        closeModal('loginModal');
+        showToast('Welcome, Founder! Access granted.');
+        fetchCurrentTabData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function logoutFounder() {
+      localStorage.removeItem('bb_admin_token');
+      currentAuthToken = '';
+      document.getElementById('loginModal').classList.add('show');
+    }
+
+    // Tab Navigation
+    function switchTab(tabName) {
+      currentTab = tabName;
+      document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+      const target = document.getElementById(`tab-${tabName}`);
+      if (target) target.style.display = 'block';
+
+      // Mark nav active
+      const navs = document.querySelectorAll('.nav-item');
+      navs.forEach(n => {
+        if (n.getAttribute('onclick')?.includes(`'${tabName}'`)) n.classList.add('active');
+      });
+
+      const titles = {
+        overview: 'Dashboard Overview',
+        orders: 'Orders & 10-Step Workflow',
+        payments: 'Manual UPI Verification Queue',
+        shops: 'Shop Management & Geolocation',
+        inventory: 'Shop-Specific Inventory & Pricing',
+        products: 'Product Catalogue',
+        deliveries: 'Delivery Coordination',
+        audit: 'Security & Audit Logs',
+        settings: 'Platform & Merchant Settings'
+      };
+      document.getElementById('pageTitle').textContent = titles[tabName] || 'Founder Portal';
+
+      fetchCurrentTabData();
+    }
+
+    function fetchCurrentTabData() {
+      if (currentTab === 'overview') loadOverview();
+      else if (currentTab === 'orders') loadOrdersTable();
+      else if (currentTab === 'payments') loadPendingPayments();
+      else if (currentTab === 'shops') loadShopsTable();
+      else if (currentTab === 'inventory') loadInventoryShops();
+      else if (currentTab === 'products') loadProductsTable();
+      else if (currentTab === 'deliveries') loadDeliveriesTable();
+      else if (currentTab === 'audit') loadAuditLogs();
+      else if (currentTab === 'settings') loadPlatformSettings();
+    }
+
+    // ================= OVERVIEW TAB =================
+    async function loadOverview() {
+      try {
+        const data = await apiRequest('/admin/overview');
+        document.getElementById('kpiTodayOrders').textContent = data.todayOrders || 0;
+        document.getElementById('kpiAwaitingStock').textContent = data.awaitingStockConfirmation || 0;
+        document.getElementById('kpiAwaitingPayment').textContent = data.awaitingPaymentVerification || 0;
+        document.getElementById('kpiTotalSales').textContent = `₹${Math.round((data.totalSalesPaise || 0) / 100).toLocaleString('en-IN')}`;
+        document.getElementById('kpiPreparingOrders').textContent = data.paidOrdersPreparing || 0;
+        document.getElementById('kpiAwaitingDelivery').textContent = data.awaitingDeliveryBooking || 0;
+        document.getElementById('kpiActiveShops').textContent = `${data.activeShopsCount} / ${data.totalShopsCount}`;
+        document.getElementById('kpiLowStock').textContent = data.lowStockCount || 0;
+
+        document.getElementById('pendingOrdersBadge').textContent = data.awaitingStockConfirmation || 0;
+        document.getElementById('pendingPaymentsBadge').textContent = data.awaitingPaymentVerification || 0;
+
+        // Render Recent Orders
+        const tbody = document.getElementById('recentOrdersTbody');
+        if (!data.recentOrders || data.recentOrders.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim);">No recent order activity found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.recentOrders.map(o => `
+          <tr>
+            <td><strong>${o.orderNumber}</strong></td>
+            <td>${new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+            <td>${o.addressSnapshot?.name || 'Student'}</td>
+            <td>${o.addressSnapshot?.city || o.addressSnapshot?.locality || 'Bengaluru'}</td>
+            <td>${o.items?.length || 1} items</td>
+            <td><strong>₹${o.total}</strong></td>
+            <td><span class="status-pill ${getStatusPillClass(o.status)}">${formatStatus(o.status)}</span></td>
+            <td><button class="btn btn-secondary btn-sm" onclick="switchTab('orders')">Inspect</button></td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    // ================= ORDERS TAB =================
+    async function loadOrdersTable() {
+      try {
+        const status = document.getElementById('orderFilterStatus')?.value || 'ALL';
+        const orders = await apiRequest(`/admin/orders?status=${status}`);
+        const tbody = document.getElementById('allOrdersTbody');
+
+        if (!orders || orders.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim);">No orders found for selected filter.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = orders.map(o => `
+          <tr>
+            <td>
+              <strong>${o.orderNumber}</strong>
+              <div style="font-size: 0.74rem; color: var(--text-dim);">${new Date(o.createdAt).toLocaleDateString()} ${new Date(o.createdAt).toLocaleTimeString()}</div>
+            </td>
+            <td>
+              <div><strong>${o.addressSnapshot?.name || 'Customer'}</strong> (${o.addressSnapshot?.phone || ''})</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">${o.addressSnapshot?.addressLine1 || ''}, ${o.addressSnapshot?.city || 'Bengaluru'}</div>
+              <button class="btn btn-secondary btn-sm" style="margin-top: 4px; padding: 2px 6px; font-size: 0.72rem;" onclick="copyToClipboard('${o.addressSnapshot?.addressLine1}, ${o.addressSnapshot?.city} - Ph: ${o.addressSnapshot?.phone}')">📋 Copy Drop</button>
+            </td>
+            <td>
+              <div><strong>${o.storeName || 'Vidya Depot'}</strong></div>
+            </td>
+            <td>
+              <div style="font-size: 0.82rem;">${(o.items || []).map(i => `${i.quantity}x ${i.productName || 'Item'}`).join(', ')}</div>
+            </td>
+            <td><strong>₹${o.total}</strong></td>
+            <td>
+              <span class="status-pill ${o.paymentStatus === 'SUCCESS' || o.paymentStatus === 'PAYMENT_VERIFIED' ? 'status-verified' : 'status-payment'}">
+                ${o.paymentStatus}
+              </span>
+            </td>
+            <td><span class="status-pill ${getStatusPillClass(o.status)}">${formatStatus(o.status)}</span></td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                ${getOrderWorkflowActions(o)}
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    function getOrderWorkflowActions(order) {
+      if (order.status === 'ORDER_RECEIVED' || order.status === 'PENDING_PAYMENT') {
+        return `
+          <button class="btn btn-primary btn-sm" onclick="confirmAvailability('${order.id}', 'CONFIRM')">✓ Confirm Stock</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmAvailability('${order.id}', 'REJECT')">✕ Reject</button>
+        `;
+      }
+      if (order.status === 'SHOP_CONFIRMED' || order.status === 'STORE_ACCEPTED') {
+        return `
+          <button class="btn btn-primary btn-sm" onclick="acceptAndRequestPayment('${order.id}')">💳 Request Payment</button>
+        `;
+      }
+      if (order.status === 'PAYMENT_REQUIRED') {
+        return `<span style="font-size: 0.78rem; color: var(--accent);">Awaiting Customer UPI</span>`;
+      }
+      if (order.status === 'PAYMENT_SUBMITTED') {
+        return `
+          <button class="btn btn-success btn-sm" onclick="switchTab('payments')">🔍 Verify UTR in Queue</button>
+        `;
+      }
+      if (order.status === 'PAYMENT_VERIFIED' || order.status === 'CONFIRMED') {
+        return `
+          <button class="btn btn-primary btn-sm" onclick="markOrderProcuring('${order.id}')">📦 Mark Procuring</button>
+        `;
+      }
+      if (order.status === 'PREPARING') {
+        return `
+          <button class="btn btn-success btn-sm" onclick="markOrderReady('${order.id}')">🏷️ Mark Ready for Pickup</button>
+        `;
+      }
+      if (order.status === 'READY_FOR_PICKUP') {
+        return `
+          <button class="btn btn-primary btn-sm" onclick="openDeliveryBookingModal('${order.id}')">🛵 Book Porter / Rapido</button>
+        `;
+      }
+      if (order.status === 'DELIVERY_BOOKED') {
+        return `
+          <button class="btn btn-secondary btn-sm" onclick="updateDeliveryStatus('${order.id}', 'PICKED_UP')">📦 Rider Picked Up</button>
+          <button class="btn btn-secondary btn-sm" onclick="updateDeliveryStatus('${order.id}', 'OUT_FOR_DELIVERY')">🛵 Out for Delivery</button>
+        `;
+      }
+      if (order.status === 'PICKED_UP' || order.status === 'OUT_FOR_DELIVERY') {
+        return `
+          <button class="btn btn-success btn-sm" onclick="updateDeliveryStatus('${order.id}', 'DELIVERED')">🏁 Mark Delivered</button>
+        `;
+      }
+      return `<span style="font-size: 0.78rem; color: var(--text-dim);">Completed</span>`;
+    }
+
+    // Step 3
+    async function confirmAvailability(orderId, action) {
+      const notes = prompt(`Enter founder availability verification notes for this order:`, 'Checked with shop owner - in stock');
+      try {
+        await apiRequest(`/admin/orders/${orderId}/availability`, {
+          method: 'POST',
+          body: JSON.stringify({ action, notes }),
+        });
+        showToast(`Stock availability marked as ${action}`);
+        loadOrdersTable();
+      } catch (_e) {}
+    }
+
+    // Step 4
+    async function acceptAndRequestPayment(orderId) {
+      try {
+        await apiRequest(`/admin/orders/${orderId}/accept-payment-due`, { method: 'POST' });
+        showToast('Order accepted! Customer notified to pay via UPI.');
+        loadOrdersTable();
+      } catch (_e) {}
+    }
+
+    // Step 7
+    async function markOrderProcuring(orderId) {
+      try {
+        await apiRequest(`/admin/orders/${orderId}/procure`, { method: 'POST' });
+        showToast('Order marked as being procured & packed.');
+        loadOrdersTable();
+      } catch (_e) {}
+    }
+
+    async function markOrderReady(orderId) {
+      try {
+        await apiRequest(`/admin/orders/${orderId}/ready`, { method: 'POST' });
+        showToast('Order packed & ready for delivery partner pickup.');
+        loadOrdersTable();
+      } catch (_e) {}
+    }
+
+    // Step 8 & 9
+    function openDeliveryBookingModal(orderId) {
+      document.getElementById('deliveryModalOrderId').value = orderId;
+      document.getElementById('deliveryModalRef').value = `PRT-${Math.floor(100000 + Math.random() * 900000)}`;
+      document.getElementById('deliveryModal').classList.add('show');
+    }
+
+    async function submitDeliveryBooking(e) {
+      e.preventDefault();
+      const orderId = document.getElementById('deliveryModalOrderId').value;
+      const provider = document.getElementById('deliveryModalProvider').value;
+      const bookingReference = document.getElementById('deliveryModalRef').value;
+      const deliveryFee = Number(document.getElementById('deliveryModalFee').value);
+      const riderName = document.getElementById('deliveryModalRiderName').value;
+      const riderPhone = document.getElementById('deliveryModalRiderPhone').value;
+      const etaMinutes = Number(document.getElementById('deliveryModalEta').value);
+
+      try {
+        await apiRequest(`/admin/orders/${orderId}/book-delivery`, {
+          method: 'POST',
+          body: JSON.stringify({ provider, bookingReference, deliveryFee, riderName, riderPhone, etaMinutes }),
+        });
+        showToast(`Delivery recorded via ${provider}!`);
+        closeModal('deliveryModal');
+        loadOrdersTable();
+      } catch (_e) {}
+    }
+
+    async function updateDeliveryStatus(orderId, status) {
+      try {
+        await apiRequest(`/admin/orders/${orderId}/delivery-status`, {
+          method: 'POST',
+          body: JSON.stringify({ status }),
+        });
+        showToast(`Delivery status updated to ${status}`);
+        loadOrdersTable();
+      } catch (_e) {}
+    }
+
+    // ================= PAYMENTS TAB =================
+    async function loadPendingPayments() {
+      try {
+        const pending = await apiRequest('/admin/payments/pending');
+        const tbody = document.getElementById('pendingPaymentsTbody');
+
+        if (!pending || pending.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim);">No pending payments awaiting verification.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = pending.map(p => `
+          <tr>
+            <td><code>${p.id}</code></td>
+            <td><strong>${p.orderNumber || p.orderId}</strong></td>
+            <td>${new Date(p.submittedAt).toLocaleTimeString()}</td>
+            <td><strong style="color: var(--success);">₹${p.amount}</strong></td>
+            <td>
+              <code style="font-size: 0.95rem; font-weight: 700; color: var(--accent);">${p.transactionReference}</code>
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 0.72rem; margin-left: 6px;" onclick="copyToClipboard('${p.transactionReference}')">Copy</button>
+            </td>
+            <td>
+              ${p.screenshotUrl ? `<a href="${p.screenshotUrl}" target="_blank" class="btn btn-secondary btn-sm">View Proof Image</a>` : '<span style="color: var(--text-dim);">No Screenshot</span>'}
+            </td>
+            <td><span class="status-pill status-payment">Pending Review</span></td>
+            <td>
+              <div style="display: flex; gap: 6px;">
+                <button class="btn btn-success btn-sm" onclick="verifyPayment('${p.id}', 'VERIFY')">✓ Verify Credit</button>
+                <button class="btn btn-danger btn-sm" onclick="verifyPayment('${p.id}', 'REJECT')">✕ Reject</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    async function verifyPayment(submissionId, action) {
+      let reason = '';
+      if (action === 'REJECT') {
+        reason = prompt('Enter rejection reason (customer will be notified):', 'UTR reference not found in bank statement');
+        if (!reason) return;
+      } else {
+        if (!confirm('Have you confirmed actual funds arrival in your merchant bank account?')) return;
+      }
+
+      try {
+        await apiRequest(`/admin/payments/${submissionId}/verify`, {
+          method: 'POST',
+          body: JSON.stringify({ action, reason }),
+        });
+        showToast(`Payment ${action === 'VERIFY' ? 'verified' : 'rejected'}`);
+        loadPendingPayments();
+      } catch (_e) {}
+    }
+
+    // ================= SHOPS TAB =================
+    async function loadShopsTable() {
+      try {
+        const shops = await apiRequest('/admin/shops');
+        const tbody = document.getElementById('shopsTableTbody');
+
+        tbody.innerHTML = shops.map(s => `
+          <tr>
+            <td><code>${s.code || 'BB-SHP'}</code></td>
+            <td><strong>${s.name}</strong></td>
+            <td>${s.ownerName}<br><span style="color: var(--text-dim); font-size: 0.78rem;">${s.phone}</span></td>
+            <td>${s.address}</td>
+            <td><code>${s.latitude.toFixed(4)}, ${s.longitude.toFixed(4)}</code></td>
+            <td>${s.deliveryRadiusKm} km</td>
+            <td>${s.openTime} - ${s.closeTime}</td>
+            <td>
+              <span class="status-pill ${s.isActive ? 'status-completed' : 'status-cancelled'}">
+                ${s.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="editShop('${s.id}')">Edit</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    function openShopModal(shop = null) {
+      document.getElementById('shopFormId').value = shop ? shop.id : '';
+      document.getElementById('shopFormName').value = shop ? shop.name : '';
+      document.getElementById('shopFormCode').value = shop ? (shop.code || '') : '';
+      document.getElementById('shopFormOwner').value = shop ? shop.ownerName : '';
+      document.getElementById('shopFormPhone').value = shop ? shop.phone : '';
+      document.getElementById('shopFormAddress').value = shop ? shop.address : '';
+      document.getElementById('shopFormLocality').value = shop ? (shop.locality || '') : '';
+      document.getElementById('shopFormPincode').value = shop ? (shop.pincode || '560034') : '560034';
+      document.getElementById('shopFormRadius').value = shop ? shop.deliveryRadiusKm : 6.0;
+      document.getElementById('shopFormOpen').value = shop ? shop.openTime : '08:00';
+      document.getElementById('shopFormClose').value = shop ? shop.closeTime : '21:30';
+      document.getElementById('shopFormNotes').value = shop ? (shop.founderNotes || '') : '';
+
+      const lat = shop ? shop.latitude : 12.9352;
+      const lng = shop ? shop.longitude : 77.6245;
+      document.getElementById('shopFormLat').value = lat;
+      document.getElementById('shopFormLng').value = lng;
+      document.getElementById('selectedCoordsText').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+      document.getElementById('shopModalTitle').textContent = shop ? 'Edit Partner Shop' : 'Add Stationery Partner Shop';
+      document.getElementById('shopModal').classList.add('show');
+
+      setTimeout(() => initMap(lat, lng), 300);
+    }
+
+    function initMap(lat, lng) {
+      const container = document.getElementById('mapPicker');
+      if (leafletMap) {
+        leafletMap.remove();
+        leafletMap = null;
+      }
+
+      leafletMap = L.map(container).setView([lat, lng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(leafletMap);
+
+      mapMarker = L.marker([lat, lng], { draggable: true }).addTo(leafletMap);
+
+      mapMarker.on('dragend', function (e) {
+        const position = mapMarker.getLatLng();
+        document.getElementById('shopFormLat').value = position.lat;
+        document.getElementById('shopFormLng').value = position.lng;
+        document.getElementById('selectedCoordsText').textContent = `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`;
+      });
+    }
+
+    async function searchMapPlace() {
+      const q = document.getElementById('mapSearchInput').value.trim();
+      if (!q) return;
+
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Bengaluru, India')}`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          leafletMap.setView([lat, lon], 15);
+          mapMarker.setLatLng([lat, lon]);
+          document.getElementById('shopFormLat').value = lat;
+          document.getElementById('shopFormLng').value = lon;
+          document.getElementById('selectedCoordsText').textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+        } else {
+          showToast('Locality not found on map', 'error');
+        }
+      } catch (_e) {
+        showToast('Geocoding service unavailable', 'error');
+      }
+    }
+
+    async function saveShopForm(e) {
+      e.preventDefault();
+      const shopId = document.getElementById('shopFormId').value;
+      const payload = {
+        name: document.getElementById('shopFormName').value.trim(),
+        code: document.getElementById('shopFormCode').value.trim(),
+        ownerName: document.getElementById('shopFormOwner').value.trim(),
+        phone: document.getElementById('shopFormPhone').value.trim(),
+        address: document.getElementById('shopFormAddress').value.trim(),
+        locality: document.getElementById('shopFormLocality').value.trim(),
+        pincode: document.getElementById('shopFormPincode').value.trim(),
+        latitude: parseFloat(document.getElementById('shopFormLat').value),
+        longitude: parseFloat(document.getElementById('shopFormLng').value),
+        deliveryRadiusKm: parseFloat(document.getElementById('shopFormRadius').value),
+        openTime: document.getElementById('shopFormOpen').value,
+        closeTime: document.getElementById('shopFormClose').value,
+        founderNotes: document.getElementById('shopFormNotes').value,
+      };
+
+      try {
+        if (shopId) {
+          await apiRequest(`/admin/shops/${shopId}`, { method: 'PUT', body: JSON.stringify(payload) });
+          showToast('Shop details updated');
+        } else {
+          await apiRequest('/admin/shops', { method: 'POST', body: JSON.stringify(payload) });
+          showToast('New partner shop registered!');
+        }
+        closeModal('shopModal');
+        loadShopsTable();
+      } catch (_e) {}
+    }
+
+    async function editShop(id) {
+      try {
+        const shop = await apiRequest(`/admin/shops/${id}`);
+        openShopModal(shop);
+      } catch (_e) {}
+    }
+
+    // ================= INVENTORY TAB =================
+    async function loadInventoryShops() {
+      try {
+        const shops = await apiRequest('/admin/shops');
+        const selector = document.getElementById('inventoryShopSelector');
+        selector.innerHTML = shops.map(s => `<option value="${s.id}">${s.name} (${s.locality || s.city})</option>`).join('');
+        if (shops.length > 0) {
+          loadInventoryTable();
+        }
+      } catch (_e) {}
+    }
+
+    async function loadInventoryTable() {
+      const shopId = document.getElementById('inventoryShopSelector').value;
+      if (!shopId) return;
+
+      try {
+        const items = await apiRequest(`/admin/shops/${shopId}/inventory`);
+        const tbody = document.getElementById('inventoryTableTbody');
+
+        tbody.innerHTML = items.map(inv => `
+          <tr>
+            <td><strong>${inv.productName || inv.productId}</strong></td>
+            <td><span style="font-size: 0.78rem; color: var(--text-dim);">${inv.productId}</span></td>
+            <td>
+              <input type="number" class="form-control" style="width: 80px; padding: 4px 8px;" value="${inv.price}" id="price_${inv.productId}">
+            </td>
+            <td>₹${inv.mrp}</td>
+            <td>
+              <input type="number" class="form-control" style="width: 80px; padding: 4px 8px;" value="${inv.quantity}" id="qty_${inv.productId}">
+            </td>
+            <td><span style="color: var(--accent); font-weight: 600;">${inv.reservedQuantity}</span></td>
+            <td>
+              <strong style="color: ${inv.sellableQuantity <= inv.lowStockThreshold ? 'var(--danger)' : 'var(--success)'};">
+                ${inv.sellableQuantity}
+              </strong>
+            </td>
+            <td>${inv.lowStockThreshold}</td>
+            <td>
+              <span class="status-pill ${inv.isAvailable && inv.sellableQuantity > 0 ? 'status-verified' : 'status-cancelled'}">
+                ${inv.isAvailable && inv.sellableQuantity > 0 ? 'In Stock' : 'Low / OOS'}
+              </span>
+            </td>
+            <td>
+              <button class="btn btn-primary btn-sm" onclick="saveInventoryRow('${shopId}', '${inv.productId}')">Save</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    async function saveInventoryRow(shopId, productId) {
+      const price = Number(document.getElementById(`price_${productId}`).value);
+      const quantity = Number(document.getElementById(`qty_${productId}`).value);
+
+      try {
+        await apiRequest(`/admin/shops/${shopId}/inventory/${productId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ price, quantity }),
+        });
+        showToast('Inventory saved!');
+        loadInventoryTable();
+      } catch (_e) {}
+    }
+
+    function downloadCsvTemplate() {
+      const csv = 'productId,productName,sellingPrice,mrp,quantity,isAvailable\nprod_hauser_xo_ball,"Hauser XO Pen Pack",50,50,100,true\nprod_cello_butterflow_pack,"Cello Butterflow Pack",60,75,80,true\n';
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bookbuddys_shop_inventory_template.csv';
+      a.click();
+    }
+
+    function triggerCsvUpload() {
+      document.getElementById('csvFileInput').click();
+    }
+
+    async function handleCsvFileSelected(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const shopId = document.getElementById('inventoryShopSelector').value;
+      if (!shopId) {
+        showToast('Please select a shop first', 'error');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function (evt) {
+        const text = evt.target.result;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length <= 1) {
+          showToast('CSV is empty', 'error');
+          return;
+        }
+
+        const items = [];
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(',');
+          if (parts[0]) {
+            items.push({
+              productId: parts[0].trim(),
+              price: parts[2] ? Number(parts[2].trim()) : undefined,
+              mrp: parts[3] ? Number(parts[3].trim()) : undefined,
+              quantity: parts[4] ? Number(parts[4].trim()) : undefined,
+              isAvailable: parts[5] ? parts[5].trim().toLowerCase() === 'true' : true,
+            });
+          }
+        }
+
+        try {
+          const res = await apiRequest(`/admin/shops/${shopId}/inventory/bulk`, {
+            method: 'POST',
+            body: JSON.stringify({ items }),
+          });
+          showToast(`Bulk updated ${res.successCount} items!`);
+          loadInventoryTable();
+        } catch (_e) {}
+      };
+      reader.readAsText(file);
+    }
+
+    // ================= PRODUCTS TAB =================
+    async function loadProductsTable() {
+      try {
+        const prods = await apiRequest('/admin/products');
+        const tbody = document.getElementById('productsTableTbody');
+
+        tbody.innerHTML = prods.map(p => `
+          <tr>
+            <td>
+              <img src="${p.imageUrl}" alt="" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px;">
+            </td>
+            <td>
+              <strong>${p.name}</strong>
+              <div style="font-size: 0.74rem; color: var(--text-dim);">${p.brand}</div>
+            </td>
+            <td>${p.categoryId}</td>
+            <td><strong>₹${p.price}</strong></td>
+            <td>₹${p.mrp}</td>
+            <td>${p.unit}</td>
+            <td><code>${p.sku || '-'}</code></td>
+            <td><span class="status-pill ${p.isActive ? 'status-verified' : 'status-cancelled'}">${p.isActive ? 'Active' : 'Off'}</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="editProduct('${p.id}')">Edit</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    function openProductModal(prod = null) {
+      document.getElementById('prodFormId').value = prod ? prod.id : '';
+      document.getElementById('prodFormName').value = prod ? prod.name : '';
+      document.getElementById('prodFormBrand').value = prod ? prod.brand : 'BookBuddys Partner';
+      document.getElementById('prodFormCategory').value = prod ? prod.categoryId : 'cat_notebooks';
+      document.getElementById('prodFormPrice').value = prod ? prod.price : '';
+      document.getElementById('prodFormMrp').value = prod ? prod.mrp : '';
+      document.getElementById('prodFormStock').value = prod ? prod.stock : 25;
+      document.getElementById('prodFormImageUrl').value = prod ? prod.imageUrl : 'https://images.unsplash.com/photo-1585336261026-775af4609c0d?w=500';
+      document.getElementById('prodFormDescription').value = prod ? (prod.description || '') : '';
+
+      document.getElementById('productModalTitle').textContent = prod ? 'Edit Product' : 'Add Stationery Product';
+      document.getElementById('productModal').classList.add('show');
+    }
+
+    async function saveProductForm(e) {
+      e.preventDefault();
+      const prodId = document.getElementById('prodFormId').value;
+      const payload = {
+        name: document.getElementById('prodFormName').value.trim(),
+        brand: document.getElementById('prodFormBrand').value.trim(),
+        categoryId: document.getElementById('prodFormCategory').value,
+        price: Number(document.getElementById('prodFormPrice').value),
+        mrp: Number(document.getElementById('prodFormMrp').value),
+        stock: Number(document.getElementById('prodFormStock').value),
+        imageUrl: document.getElementById('prodFormImageUrl').value.trim(),
+        description: document.getElementById('prodFormDescription').value.trim(),
+      };
+
+      try {
+        if (prodId) {
+          await apiRequest(`/admin/products/${prodId}`, { method: 'PUT', body: JSON.stringify(payload) });
+          showToast('Product updated!');
+        } else {
+          await apiRequest('/admin/products', { method: 'POST', body: JSON.stringify(payload) });
+          showToast('New product created!');
+        }
+        closeModal('productModal');
+        loadProductsTable();
+      } catch (_e) {}
+    }
+
+    function editProduct(id) {
+      // Find from products table
+      apiRequest('/admin/products').then(prods => {
+        const prod = prods.find(p => p.id === id);
+        if (prod) openProductModal(prod);
+      });
+    }
+
+    // ================= DELIVERIES TAB =================
+    async function loadDeliveriesTable() {
+      try {
+        const orders = await apiRequest('/admin/orders');
+        const bookings = [];
+        for (const o of orders) {
+          if (o.status === 'READY_FOR_PICKUP' || o.status === 'DELIVERY_BOOKED' || o.status === 'PICKED_UP' || o.status === 'OUT_FOR_DELIVERY' || o.status === 'DELIVERED') {
+            const details = await apiRequest(`/admin/orders/${o.id}`);
+            if (details.deliveryBooking) {
+              bookings.push(details.deliveryBooking);
+            }
+          }
+        }
+
+        const tbody = document.getElementById('deliveriesTableTbody');
+        if (bookings.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim);">No active deliveries in transit.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = bookings.map(b => `
+          <tr>
+            <td><strong>${b.orderNumber}</strong></td>
+            <td><span class="status-pill status-received">${b.provider}</span></td>
+            <td><code>${b.bookingReference || '-'}</code></td>
+            <td>${b.riderName || 'Rider'}<br><span style="font-size: 0.76rem; color: var(--text-dim);">${b.riderPhone || ''}</span></td>
+            <td>
+              <div>${b.pickupAddressSnapshot?.name || 'Shop'}</div>
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 0.72rem; margin-top: 3px;" onclick="copyToClipboard('${b.pickupAddressSnapshot?.address} - Ph: ${b.pickupAddressSnapshot?.phone}')">📋 Copy Pickup</button>
+            </td>
+            <td>
+              <div>${b.deliveryAddressSnapshot?.addressLine1 || ''}, ${b.deliveryAddressSnapshot?.city || ''}</div>
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 0.72rem; margin-top: 3px;" onclick="copyToClipboard('${b.deliveryAddressSnapshot?.addressLine1}, ${b.deliveryAddressSnapshot?.city} - Ph: ${b.deliveryAddressSnapshot?.phone}')">📋 Copy Drop</button>
+            </td>
+            <td>₹${b.deliveryFee}</td>
+            <td><span class="status-pill status-delivering">${b.pickupStatus}</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="switchTab('orders')">Manage</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    // ================= AUDIT LOG TAB =================
+    async function loadAuditLogs() {
+      try {
+        const logs = await apiRequest('/admin/audit-logs');
+        const tbody = document.getElementById('auditLogsTbody');
+
+        tbody.innerHTML = logs.map(l => `
+          <tr>
+            <td>${new Date(l.createdAt).toLocaleTimeString()} ${new Date(l.createdAt).toLocaleDateString()}</td>
+            <td><strong><code>${l.action}</code></strong></td>
+            <td>${l.entityType}</td>
+            <td><code>${l.entityId}</code></td>
+            <td>${l.adminId}</td>
+            <td><pre style="font-size: 0.74rem; color: var(--text-muted); max-width: 250px; overflow-x: auto;">${JSON.stringify(l.details || {})}</pre></td>
+          </tr>
+        `).join('');
+      } catch (_e) {}
+    }
+
+    // ================= SETTINGS TAB =================
+    async function loadPlatformSettings() {
+      try {
+        const settings = await apiRequest('/admin/settings');
+        document.getElementById('settingUpiVpa').value = settings.merchantUpi?.vpa || 'bookbuddys@upi';
+        document.getElementById('settingPayeeName').value = settings.merchantUpi?.payeeName || 'BookBuddys';
+        document.getElementById('settingDeliveryFee').value = settings.deliveryRules?.defaultFee || 30;
+        document.getElementById('settingFreeThreshold').value = settings.deliveryRules?.freeDeliveryThreshold || 199;
+        document.getElementById('settingMaxRadius').value = settings.deliveryRules?.maxRadiusKm || 12;
+        document.getElementById('settingDefaultEta').value = settings.deliveryRules?.defaultEtaMinutes || 45;
+        document.getElementById('settingNotifyEmail').value = settings.founderNotifications?.notifyEmail || 'founder@bookbuddys.in';
+      } catch (_e) {}
+    }
+
+    async function savePlatformSettings(e) {
+      e.preventDefault();
+      const payload = {
+        merchantUpi: {
+          vpa: document.getElementById('settingUpiVpa').value.trim(),
+          payeeName: document.getElementById('settingPayeeName').value.trim(),
+          qrEnabled: true,
+        },
+        deliveryRules: {
+          defaultFee: Number(document.getElementById('settingDeliveryFee').value),
+          freeDeliveryThreshold: Number(document.getElementById('settingFreeThreshold').value),
+          maxRadiusKm: Number(document.getElementById('settingMaxRadius').value),
+          defaultEtaMinutes: Number(document.getElementById('settingDefaultEta').value),
+        },
+        founderNotifications: {
+          notifyEmail: document.getElementById('settingNotifyEmail').value.trim(),
+          notifyPhone: '+919876543210',
+          channels: ['EMAIL', 'IN_APP'],
+        },
+      };
+
+      try {
+        await apiRequest('/admin/settings', { method: 'PUT', body: JSON.stringify(payload) });
+        showToast('Platform settings saved successfully!');
+      } catch (_e) {}
+    }
+
+    // Helpers
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard!');
+      });
+    }
+
+    function formatStatus(status) {
+      return (status || '').replace(/_/g, ' ');
+    }
+
+    function getStatusPillClass(status) {
+      if (status === 'ORDER_RECEIVED' || status === 'PENDING_PAYMENT') return 'status-received';
+      if (status === 'SHOP_CONFIRMED' || status === 'STORE_ACCEPTED') return 'status-confirmed';
+      if (status === 'PAYMENT_REQUIRED' || status === 'PAYMENT_SUBMITTED') return 'status-payment';
+      if (status === 'PAYMENT_VERIFIED' || status === 'CONFIRMED') return 'status-verified';
+      if (status === 'PREPARING' || status === 'READY_FOR_PICKUP' || status === 'DELIVERY_BOOKED') return 'status-delivering';
+      if (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') return 'status-delivering';
+      if (status === 'DELIVERED') return 'status-completed';
+      if (status === 'CANCELLED' || status === 'REFUNDED') return 'status-cancelled';
+      return 'status-received';
+    }
+
+    // Initial load
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchCurrentTabData();
+      // Auto-refresh metrics every 15 seconds
+      setInterval(() => {
+        if (currentTab === 'overview') loadOverview();
+      }, 15000);
+    });
+  </script>
+</body>
+</html>
