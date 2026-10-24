@@ -25,7 +25,32 @@ if (isConfigured) {
     },
   });
 } else {
-  // Safe mock client for development/testing when Supabase project is not yet provisioned
+  // Safe mock client builder that supports any chainable query without throwing
+  const createMockChain = (): any => {
+    const target: any = () => target;
+    const handler: ProxyHandler<any> = {
+      get(_obj, prop) {
+        if (prop === 'then') {
+          return (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve);
+        }
+        if (prop === 'single' || prop === 'maybeSingle') {
+          return () => Promise.resolve({ data: null, error: null });
+        }
+        if (prop === 'insert' || prop === 'upsert' || prop === 'update' || prop === 'delete') {
+          return () => new Proxy(target, handler);
+        }
+        if (prop === 'select') {
+          return () => new Proxy(target, handler);
+        }
+        return () => new Proxy(target, handler);
+      },
+      apply() {
+        return new Proxy(target, handler);
+      }
+    };
+    return new Proxy(target, handler);
+  };
+
   supabaseClient = {
     auth: {
       getUser: async (token: string) => {
@@ -49,12 +74,7 @@ if (isConfigured) {
       signInWithOtp: async () => ({ data: {}, error: null } as any),
       verifyOtp: async () => ({ data: { session: { access_token: 'dev-token-user_dev_default' }, user: { id: 'user_dev_default' } }, error: null } as any),
     },
-    from: () => ({
-      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
-      insert: async () => ({ data: null, error: null }),
-      update: async () => ({ data: null, error: null }),
-      delete: async () => ({ data: null, error: null }),
-    }),
+    from: () => createMockChain(),
   } as unknown as SupabaseClient;
 
   supabaseAuthClient = supabaseClient;

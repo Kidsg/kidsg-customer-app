@@ -154,6 +154,30 @@ if (isConfigured) {
     }
   });
 } else {
+  const createMockChain = () => {
+    const target = () => target;
+    const handler = {
+      get(_obj, prop) {
+        if (prop === "then") {
+          return (resolve) => Promise.resolve({ data: null, error: null }).then(resolve);
+        }
+        if (prop === "single" || prop === "maybeSingle") {
+          return () => Promise.resolve({ data: null, error: null });
+        }
+        if (prop === "insert" || prop === "upsert" || prop === "update" || prop === "delete") {
+          return () => new Proxy(target, handler);
+        }
+        if (prop === "select") {
+          return () => new Proxy(target, handler);
+        }
+        return () => new Proxy(target, handler);
+      },
+      apply() {
+        return new Proxy(target, handler);
+      }
+    };
+    return new Proxy(target, handler);
+  };
   supabaseClient = {
     auth: {
       getUser: async (token) => {
@@ -177,12 +201,7 @@ if (isConfigured) {
       signInWithOtp: async () => ({ data: {}, error: null }),
       verifyOtp: async () => ({ data: { session: { access_token: "dev-token-user_dev_default" }, user: { id: "user_dev_default" } }, error: null })
     },
-    from: () => ({
-      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
-      insert: async () => ({ data: null, error: null }),
-      update: async () => ({ data: null, error: null }),
-      delete: async () => ({ data: null, error: null })
-    })
+    from: () => createMockChain()
   };
   supabaseAuthClient = supabaseClient;
 }
