@@ -395,6 +395,56 @@ fun KidsGDeskHomeScreen(
                 )
             }
 
+            // BookBuddys Hyperlocal Bengaluru Delivery Promise Banner
+            item(key = "hyperlocal_banner", contentType = "hyperlocal_banner") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFFFFF7ED))
+                        .border(1.dp, Color(0xFFFFD8A8), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(text = "📍", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "BookBuddys Hyperlocal Bengaluru",
+                                    style = KidsGTypography.TitleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                )
+                                Text(
+                                    text = "Fulfilling from nearest partner hub • 45-90 mins delivery",
+                                    style = KidsGTypography.Caption.copy(color = Color(0xFFC2410C), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFFEA580C))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "LIVE",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                }
+            }
+
             // 4. "DEAL OF THE DAY" SECTION
             item(key = "deal_of_the_day", contentType = "deal_of_the_day") {
                 DealOfTheDaySection(
@@ -417,15 +467,7 @@ fun KidsGDeskHomeScreen(
                 )
             }
 
-            // 7. FEATURED COLLECTIONS SECTION (6 Feature Banners matching Image 7)
-            item(key = "featured_collections", contentType = "featured_collections") {
-                FeaturedCollectionsSection(
-                    banners = featureBanners,
-                    onBannerClick = { catId -> onNavigateToCategory?.invoke(catId) }
-                )
-            }
-
-            // 8. "FRESH PICKS" CAROUSEL SECTION (Matching Image 8)
+            // 7. "FRESH PICKS" CAROUSEL SECTION (Matching Image 8)
             item(key = "fresh_picks", contentType = "fresh_picks") {
                 FreshPicksSection(
                     items = freshPicks,

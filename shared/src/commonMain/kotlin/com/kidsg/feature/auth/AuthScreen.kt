@@ -289,18 +289,18 @@ fun AuthScreen(
 
                         isLoading = true
                         errorMessage = null
+                        infoMessage = null
                         coroutineScope.launch {
-                            val res = authRepository.checkEmail(email)
+                            // 1. Send OTP to user's email via Gmail SMTP
+                            val otpRes = authRepository.requestOtp(email)
                             isLoading = false
-                            res.onSuccess { (exists, name) ->
-                                if (exists) {
-                                    existingUserName = name ?: ""
-                                    currentStep = AuthStep.EXISTING_USER_OPTIONS
-                                } else {
-                                    currentStep = AuthStep.NEW_USER_SIGNUP
-                                }
+                            otpRes.onSuccess { msg ->
+                                infoMessage = "Verification code dispatched to $email. Please check your inbox."
+                                countdownSeconds = 30
+                                otpInput = ""
+                                currentStep = AuthStep.OTP_VERIFICATION
                             }.onFailure {
-                                errorMessage = it.message ?: "Failed to verify email. Please try again."
+                                errorMessage = it.message ?: "Failed to dispatch verification code to $email."
                             }
                         }
                     },
@@ -313,7 +313,7 @@ fun AuthScreen(
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
                         Text(
-                            text = "Continue →",
+                            text = "Send Verification OTP →",
                             style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
                         )
                     }
@@ -626,7 +626,12 @@ fun AuthScreen(
                             val result = authRepository.verifyOtp(emailInput.trim(), otpInput)
                             isLoading = false
                             result.onSuccess { profile ->
-                                onAuthSuccess(profile, true)
+                                val hasDetails = profile.studentName.isNotBlank() &&
+                                        profile.studentName != "Aarav Sharma" &&
+                                        profile.studentName != "Student" &&
+                                        profile.schoolName.isNotBlank() &&
+                                        profile.schoolName != "KidsG Partner School"
+                                onAuthSuccess(profile, hasDetails)
                             }.onFailure { err ->
                                 errorMessage = err.message ?: "Invalid or expired verification code."
                             }
@@ -641,7 +646,7 @@ fun AuthScreen(
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
                         Text(
-                            text = "Verify & Sign In →",
+                            text = "Verify & Continue →",
                             style = KidsGTypography.TitleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
                         )
                     }
@@ -675,6 +680,19 @@ fun AuthScreen(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "🔑 Have an account password? Sign in with password",
+                    style = KidsGTypography.BodySmall.copy(
+                        color = KidsGColors.OrangePrimary,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    modifier = Modifier.clickable {
+                        currentStep = AuthStep.PASSWORD_LOGIN
+                    }
+                )
             }
 
             // ==========================================

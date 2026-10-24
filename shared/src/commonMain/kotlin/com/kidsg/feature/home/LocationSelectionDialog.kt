@@ -35,7 +35,9 @@ import com.kidsg.core.designsystem.KidsGColors
 import com.kidsg.core.designsystem.KidsGPrimaryButton
 import com.kidsg.core.designsystem.KidsGShapes
 import com.kidsg.core.designsystem.KidsGSpacing
+import com.kidsg.core.designsystem.KidsGTextField
 import com.kidsg.core.designsystem.KidsGTypography
+import com.kidsg.core.storage.SessionStorage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -100,8 +102,9 @@ fun LocationSelectionDialog(
                             if (!isDetectingGps) {
                                 isDetectingGps = true
                                 coroutineScope.launch {
-                                    delay(800)
-                                    detectedLocation = "HSR Layout, 14th Main (Live GPS)"
+                                    delay(500)
+                                    val saved = SessionStorage.getCurrentLocation()
+                                    detectedLocation = saved?.takeIf { it.isNotBlank() } ?: currentLocation
                                     isDetectingGps = false
                                 }
                             }
@@ -137,6 +140,29 @@ fun LocationSelectionDialog(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(KidsGSpacing.md))
+
+                // Custom Location Input Field
+                KidsGTextField(
+                    value = detectedLocation,
+                    onValueChange = { detectedLocation = it },
+                    label = "Current Address / Area",
+                    placeholder = "e.g. Vijayanagar, Mysuru / Electronic City, Bengaluru"
+                )
+
+                Spacer(modifier = Modifier.height(KidsGSpacing.xs))
+
+                val isBengaluru = detectedLocation.contains("Bengaluru", ignoreCase = true) ||
+                        detectedLocation.contains("Bangalore", ignoreCase = true)
+                Text(
+                    text = if (isBengaluru) "⚡ Hyperlocal Hub Delivery active (45-90 mins)"
+                           else "📦 Standard Delivery / Express Courier available for this location",
+                    style = KidsGTypography.Caption.copy(
+                        color = if (isBengaluru) Color(0xFF10B981) else Color(0xFFF59E0B),
+                        fontWeight = FontWeight.Bold
+                    )
+                )
 
                 Spacer(modifier = Modifier.height(KidsGSpacing.lg))
 

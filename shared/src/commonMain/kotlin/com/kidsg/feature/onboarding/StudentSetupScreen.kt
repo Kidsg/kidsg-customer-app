@@ -61,11 +61,12 @@ fun StudentSetupScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    var studentName by remember { mutableStateOf(initialProfile?.studentName?.ifEmpty { "Aarav Sharma" } ?: "Aarav Sharma") }
+    var studentName by remember { mutableStateOf(initialProfile?.studentName?.takeIf { it != "Aarav Sharma" && it != "Student" } ?: "") }
     var selectedGrade by remember { mutableStateOf(initialProfile?.studentGrade ?: "Class 7") }
-    var schoolName by remember { mutableStateOf(initialProfile?.schoolName ?: "National Public School") }
+    var schoolName by remember { mutableStateOf(initialProfile?.schoolName?.takeIf { it != "National Public School" && it != "KidsG Partner School" } ?: "") }
     var selectedBoard by remember { mutableStateOf("CBSE") }
     var isParentMode by remember { mutableStateOf(initialProfile?.isParentMode ?: false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val primaryClasses = listOf("Class 1", "Class 2", "Class 3", "Class 4", "Class 5")
     val middleClasses = listOf("Class 6", "Class 7", "Class 8")
@@ -98,6 +99,24 @@ fun StudentSetupScreen(
                     color = KidsGColors.BlackText
                 )
             )
+
+            if (errorMessage != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFEE2E2))
+                        .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(12.dp))
+                        .padding(10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = errorMessage ?: "",
+                        style = KidsGTypography.BodySmall.copy(color = Color(0xFFB91C1C), fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
 
             Text(
                 text = "KidsG customizes stationery recommendations for your class curriculum.",
@@ -346,21 +365,26 @@ fun StudentSetupScreen(
             // Primary CTA: Enter KidsG Desk
             Button(
                 onClick = {
+                    if (studentName.isBlank()) {
+                        errorMessage = "Please enter student name to proceed."
+                        return@Button
+                    }
+                    errorMessage = null
                     coroutineScope.launch {
                         val updated = (initialProfile ?: UserProfile(
                             id = "user_${studentName.replace(" ", "_").lowercase()}",
-                            name = studentName,
-                            phone = "+91 91484 73131",
-                            email = "${studentName.replace(" ", ".").lowercase()}@kidsg.app",
-                            studentName = studentName,
+                            name = studentName.trim(),
+                            phone = initialProfile?.phone ?: "+91 9353919178",
+                            email = initialProfile?.email ?: "student@bookbuddys.in",
+                            studentName = studentName.trim(),
                             studentGrade = selectedGrade,
-                            schoolName = schoolName,
+                            schoolName = schoolName.trim().ifBlank { "BookBuddys Partner School" },
                             isParentMode = isParentMode
                         )).copy(
-                            name = studentName,
-                            studentName = studentName,
+                            name = studentName.trim(),
+                            studentName = studentName.trim(),
                             studentGrade = selectedGrade,
-                            schoolName = schoolName,
+                            schoolName = schoolName.trim().ifBlank { "BookBuddys Partner School" },
                             isParentMode = isParentMode
                         )
                         authRepository.updateProfile(updated)

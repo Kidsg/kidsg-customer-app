@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.datetime.Clock
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.kidsg.core.designsystem.KidsGAsyncImage
@@ -66,7 +67,7 @@ import kotlinx.coroutines.launch
 
 enum class DeskViewTab(val label: String) {
     OVERVIEW("Overview"),
-    SPECIFICATIONS("Specifications"),
+    SPECIFICATIONS("Specs"),
     REVIEWS("Reviews"),
     QA("Q&A")
 }
@@ -312,64 +313,8 @@ fun ProductDeskViewScreen(
                     )
                 }
 
-                // 8. Section J: "Popular with Students" Carousel (Screen 16)
-                if (popularForStudents.isNotEmpty()) {
-                    item {
-                        DeskPopularCarouselSection(
-                            products = popularForStudents,
-                            cart = cart,
-                            onProductClick = onProductClick,
-                            onAddToCart = { p ->
-                                coroutineScope.launch {
-                                    cartRepository.addToCart(p, 1)
-                                }
-                            },
-                            onIncreaseQty = { p ->
-                                val currentQty = cart.items.find { it.product.id == p.id }?.quantity ?: 0
-                                coroutineScope.launch {
-                                    cartRepository.updateQuantity(p.id, currentQty + 1)
-                                }
-                            },
-                            onDecreaseQty = { p ->
-                                val currentQty = cart.items.find { it.product.id == p.id }?.quantity ?: 0
-                                coroutineScope.launch {
-                                    cartRepository.updateQuantity(p.id, currentQty - 1)
-                                }
-                            }
-                        )
-                    }
-                }
-
-                // 9. Section K: "Your Recent Picks" Carousel (Screen 17)
-                if (recentlyViewedProducts.isNotEmpty()) {
-                    item {
-                        DeskRecentlyViewedSection(
-                            products = recentlyViewedProducts,
-                            cart = cart,
-                            onProductClick = onProductClick,
-                            onAddToCart = { p ->
-                                coroutineScope.launch {
-                                    cartRepository.addToCart(p, 1)
-                                }
-                            },
-                            onIncreaseQty = { p ->
-                                val currentQty = cart.items.find { it.product.id == p.id }?.quantity ?: 0
-                                coroutineScope.launch {
-                                    cartRepository.updateQuantity(p.id, currentQty + 1)
-                                }
-                            },
-                            onDecreaseQty = { p ->
-                                val currentQty = cart.items.find { it.product.id == p.id }?.quantity ?: 0
-                                coroutineScope.launch {
-                                    cartRepository.updateQuantity(p.id, currentQty - 1)
-                                }
-                            }
-                        )
-                    }
-                }
-
                 item {
-                    Spacer(modifier = Modifier.height(30.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -948,11 +893,12 @@ private fun DeskVariantSection(
             style = KidsGTypography.BodySmall.copy(fontWeight = FontWeight.SemiBold)
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Row(
+        LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            availableRulings.forEach { ruling ->
+            items(availableRulings.size) { i ->
+                val ruling = availableRulings[i]
                 val isSelected = ruling == selectedRuling
                 Box(
                     modifier = Modifier
@@ -964,10 +910,12 @@ private fun DeskVariantSection(
                             KidsGShapes.Small
                         )
                         .clickable { onRulingSelect(ruling) }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = ruling,
+                        softWrap = false,
+                        maxLines = 1,
                         style = KidsGTypography.Caption.copy(
                             color = if (isSelected) KidsGColors.White else KidsGColors.TextPrimary,
                             fontWeight = FontWeight.Bold
@@ -985,11 +933,12 @@ private fun DeskVariantSection(
             style = KidsGTypography.BodySmall.copy(fontWeight = FontWeight.SemiBold)
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Row(
+        LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            availableSizes.forEach { size ->
+            items(availableSizes.size) { i ->
+                val size = availableSizes[i]
                 val isSelected = size == selectedSize
                 Box(
                     modifier = Modifier
@@ -1001,10 +950,12 @@ private fun DeskVariantSection(
                             KidsGShapes.Small
                         )
                         .clickable { onSizeSelect(size) }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = size,
+                        softWrap = false,
+                        maxLines = 1,
                         style = KidsGTypography.Caption.copy(
                             color = if (isSelected) KidsGColors.White else KidsGColors.TextPrimary,
                             fontWeight = FontWeight.Bold
@@ -1022,11 +973,12 @@ private fun DeskVariantSection(
             style = KidsGTypography.BodySmall.copy(fontWeight = FontWeight.SemiBold)
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Row(
+        LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            availablePageCounts.forEach { pages ->
+            items(availablePageCounts.size) { i ->
+                val pages = availablePageCounts[i]
                 val isSelected = pages == selectedPageCount
                 Box(
                     modifier = Modifier
@@ -1038,77 +990,17 @@ private fun DeskVariantSection(
                             KidsGShapes.Small
                         )
                         .clickable { onPageCountSelect(pages) }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = pages,
+                        softWrap = false,
+                        maxLines = 1,
                         style = KidsGTypography.Caption.copy(
                             color = if (isSelected) KidsGColors.White else KidsGColors.TextPrimary,
                             fontWeight = FontWeight.Bold
                         )
                     )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Quantity Stepper & Mascot Box
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(KidsGShapes.Medium)
-                .background(KidsGColors.SurfaceDesk)
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Select Quantity",
-                    style = KidsGTypography.BodySmall.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = "Class term bulk discount applies (6+ units)",
-                    style = KidsGTypography.Caption.copy(color = KidsGColors.TextMuted, fontSize = 11.sp)
-                )
-            }
-
-            // Stepper buttons
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(KidsGShapes.FullPill)
-                    .background(KidsGColors.White)
-                    .border(1.dp, KidsGColors.BorderSubtle, KidsGShapes.FullPill)
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(KidsGColors.SurfaceDesk)
-                        .clickable(onClick = onDecreaseQty),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "−", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-
-                Text(
-                    text = "$quantity",
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    style = KidsGTypography.TitleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(KidsGColors.OrangePrimary)
-                        .clickable(onClick = onIncreaseQty),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "+", color = KidsGColors.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             }
         }
@@ -1227,53 +1119,57 @@ private fun DeskOverviewContent(product: Product) {
                 modifier = Modifier
                     .weight(1f)
                     .clip(KidsGShapes.Small)
-                    .background(KidsGColors.AccentMintLight)
-                    .border(1.dp, KidsGColors.AccentMint, KidsGShapes.Small)
-                    .padding(10.dp)
+                    .background(Color(0xFFECFDF5))
+                    .border(1.dp, Color(0xFFA7F3D0), KidsGShapes.Small)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Column {
-                    Text(text = "🌿 Eco-Friendly", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF065F46))
-                    Text(text = "Chlorine-free ozone bleached paper", fontSize = 11.sp, color = Color(0xFF065F46))
-                }
+                Text(
+                    text = "🌿 Chlorine-Free Eco Paper",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF065F46)
+                )
             }
 
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(KidsGShapes.Small)
-                    .background(KidsGColors.OrangeLight)
-                    .border(1.dp, KidsGColors.OrangeBorder, KidsGShapes.Small)
-                    .padding(10.dp)
+                    .background(Color(0xFFFFF7ED))
+                    .border(1.dp, Color(0xFFFFD8A8), KidsGShapes.Small)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Column {
-                    Text(text = "✨ Zero Ink Bleed", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = KidsGColors.OrangeDark)
-                    Text(text = "70 GSM ultra-white pages", fontSize = 11.sp, color = KidsGColors.OrangeDark)
-                }
+                Text(
+                    text = "✨ Zero Ink Bleed 70 GSM",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFFC2410C)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         // Bullet Features
         Text(
             text = "Key School Highlights",
             style = KidsGTypography.TitleSmall.copy(fontWeight = FontWeight.Bold)
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         val highlights = listOf(
-            "Designed and tailored strictly per CBSE, ICSE, and State Board curriculum guidelines.",
-            "Firm center-stitch / wire binding that withstands heavy daily school bag pressure.",
-            "Includes activity page, teacher signature column, and index sheet on front cover.",
-            "Ergonomic rounded corners preventing paper cuts and dog-eared pages."
+            "Curriculum-matched guidelines (CBSE, ICSE, State Board).",
+            "Firm center-stitch binding built for daily school bag use.",
+            "Includes activity page, teacher signature & index sheet.",
+            "Rounded safety corners preventing paper cuts."
         )
         highlights.forEach { bullet ->
             Row(
-                modifier = Modifier.padding(vertical = 4.dp),
-                verticalAlignment = Alignment.Top
+                modifier = Modifier.padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "•", color = KidsGColors.OrangePrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(text = "✓", color = KidsGColors.OrangePrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = bullet, style = KidsGTypography.BodySmall.copy(lineHeight = 18.sp))
+                Text(text = bullet, style = KidsGTypography.BodySmall.copy(lineHeight = 17.sp))
             }
         }
     }
@@ -2306,7 +2202,7 @@ private fun WriteReviewDialog(
                         .clickable(enabled = comment.isNotBlank()) {
                             onSubmit(
                                 ProductReview(
-                                    id = "rev_${System.currentTimeMillis()}",
+                                    id = "rev_${Clock.System.now().toEpochMilliseconds()}",
                                     productId = productId,
                                     authorName = reviewerName.ifBlank { "Student Reviewer" },
                                     authorRole = role,

@@ -39,6 +39,7 @@ import com.kidsg.core.designsystem.KidsGColors
 import com.kidsg.core.designsystem.KidsGPrimaryButton
 import com.kidsg.core.designsystem.KidsGShapes
 import com.kidsg.core.designsystem.KidsGSpacing
+import com.kidsg.core.designsystem.KidsGTextField
 import com.kidsg.core.designsystem.KidsGTypography
 import com.kidsg.core.storage.SessionStorage
 import com.kidsg.domain.model.Address
@@ -60,6 +61,7 @@ fun PaymentMethodScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedMethod by remember { mutableStateOf("UPI") }
+    var utrNumber by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
@@ -110,11 +112,100 @@ fun PaymentMethodScreen(
             // Payment Option 1: UPI
             PaymentMethodCard(
                 icon = "⚡",
-                title = "UPI",
-                subtitle = "Pay with any UPI app (GPay, PhonePe, Paytm)",
+                title = "UPI (Instant Scan & Pay)",
+                subtitle = "GPay, PhonePe, Paytm, CRED or any UPI app",
                 isSelected = selectedMethod == "UPI",
                 onSelect = { selectedMethod = "UPI" }
             )
+
+            // Manual UPI Instructions & UTR input when UPI is selected
+            if (selectedMethod == "UPI") {
+                Spacer(modifier = Modifier.height(KidsGSpacing.sm))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(KidsGShapes.Medium)
+                        .background(Color(0xFFFFF7ED))
+                        .border(1.dp, Color(0xFFFFD8A8), KidsGShapes.Medium)
+                        .padding(KidsGSpacing.md)
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "📱", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "BookBuddys Official UPI VPA",
+                                style = KidsGTypography.TitleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(KidsGShapes.Small)
+                                .background(Color.White)
+                                .border(1.dp, Color(0xFFE2E8F0), KidsGShapes.Small)
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "bookbuddys@upi",
+                                    style = KidsGTypography.TitleMedium.copy(
+                                        color = KidsGColors.OrangePrimary,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                )
+                                Text(
+                                    text = "VERIFIED",
+                                    style = KidsGTypography.Caption.copy(
+                                        color = Color(0xFF10B981),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "1. Pay ₹${totalAmount.toInt()} via GPay/PhonePe to bookbuddys@upi\n2. Enter the 12-digit UPI Reference (UTR) below:",
+                            style = KidsGTypography.Caption.copy(
+                                color = KidsGColors.TextSecondary,
+                                lineHeight = 16.sp
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // UTR Input field
+                        KidsGTextField(
+                            value = utrNumber,
+                            onValueChange = { input: String ->
+                                if (input.length <= 12 && input.all { it.isDigit() }) {
+                                    utrNumber = input
+                                }
+                            },
+                            label = "12-Digit UPI Reference (UTR)",
+                            placeholder = "e.g. 402819283741"
+                        )
+
+                        if (utrNumber.isNotEmpty() && utrNumber.length < 12) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "UTR must be exactly 12 digits (${utrNumber.length}/12 entered)",
+                                style = KidsGTypography.Caption.copy(color = Color(0xFFEA580C))
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(KidsGSpacing.md))
 
@@ -212,6 +303,11 @@ fun PaymentMethodScreen(
                 KidsGPrimaryButton(
                     text = "🔒 Pay ₹${totalAmount.toInt()}",
                     onClick = {
+                        if (selectedMethod == "UPI" && utrNumber.length != 12) {
+                            errorMessage = "Please enter the valid 12-digit UPI UTR number from your payment app."
+                            return@KidsGPrimaryButton
+                        }
+
                         isProcessing = true
                         errorMessage = null
                         coroutineScope.launch {
@@ -225,16 +321,23 @@ fun PaymentMethodScreen(
                                     label = "Home",
                                     recipientName = "Student Desk",
                                     phoneNumber = "+91 98765 43210",
-                                    addressLine1 = "KidsG Desk Delivery",
+                                    addressLine1 = "BookBuddys Bengaluru Delivery",
                                     addressLine2 = "",
                                     city = "Bengaluru",
                                     pincode = "560034",
                                     isDefault = true
                                 )
+                            
+                            val resolvedPaymentMethod = if (selectedMethod == "UPI" && utrNumber.isNotEmpty()) {
+                                "UPI:$utrNumber"
+                            } else {
+                                selectedMethod
+                            }
+
                             val result = orderRepository.createOrder(
                                 items = currentItems,
                                 deliveryAddress = addr,
-                                paymentMethod = selectedMethod
+                                paymentMethod = resolvedPaymentMethod
                             )
                             isProcessing = false
                             result.onSuccess { order ->

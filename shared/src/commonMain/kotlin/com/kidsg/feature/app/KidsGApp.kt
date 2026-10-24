@@ -445,6 +445,8 @@ fun KidsGApp(
                     is Screen.Profile -> {
                         ProfileScreen(
                             userProfile = currentUser,
+                            currentLocation = currentLocation,
+                            onLocationClick = { showLocationDialog = true },
                             onNavigateToAddresses = { navigateTo(Screen.AddAddress) },
                             onNavigateToOrders = {
                                 currentTab = KidsGNavTab.ORDERS

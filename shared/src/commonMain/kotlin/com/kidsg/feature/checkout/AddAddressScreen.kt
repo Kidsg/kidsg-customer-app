@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kidsg.core.designsystem.KidsGColors
 import com.kidsg.core.designsystem.KidsGPrimaryButton
@@ -34,6 +35,7 @@ import com.kidsg.core.designsystem.KidsGSpacing
 import com.kidsg.core.designsystem.KidsGTextField
 import com.kidsg.core.designsystem.KidsGTypography
 import com.kidsg.domain.model.Address
+import kotlinx.datetime.Clock
 
 /**
  * Add New Address Screen (Reference Screen 15)
@@ -154,10 +156,28 @@ fun AddAddressScreen(
 
             KidsGTextField(
                 value = pinCode,
-                onValueChange = { pinCode = it },
-                label = "PIN Code",
+                onValueChange = { input ->
+                    if (input.length <= 6 && input.all { it.isDigit() }) {
+                        pinCode = input
+                    }
+                },
+                label = "PIN Code (Bengaluru 560xxx)",
                 placeholder = "560001"
             )
+
+            if (pinCode.isNotEmpty() && !pinCode.startsWith("560")) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "⚠️ BookBuddys delivers exclusively in Bengaluru (PINs starting with 560xxx)",
+                    style = KidsGTypography.Caption.copy(color = Color(0xFFEA580C))
+                )
+            } else if (pinCode.startsWith("560")) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "✓ Bengaluru hyperlocal coverage verified (45-90 min delivery)",
+                    style = KidsGTypography.Caption.copy(color = Color(0xFF10B981))
+                )
+            }
 
             Spacer(modifier = Modifier.height(KidsGSpacing.lg))
 
@@ -198,7 +218,7 @@ fun AddAddressScreen(
                 text = "Save Address",
                 onClick = {
                     val addr = Address(
-                        id = "addr_${System.currentTimeMillis()}",
+                        id = "addr_${Clock.System.now().toEpochMilliseconds()}",
                         label = "Home",
                         recipientName = fullName.ifBlank { "Student Desk" },
                         phoneNumber = phoneNumber.ifBlank { "9876543210" },

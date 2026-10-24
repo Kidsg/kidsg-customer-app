@@ -122,44 +122,133 @@ fun OrderTrackingScreen(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 1. Order Status Timeline (Reference Screen 19)
+            // 1. Order Status Timeline (10-step BookBuddys State Machine)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(KidsGColors.White)
                     .padding(KidsGSpacing.lg)
             ) {
+                Text(
+                    text = "Order Journey (10-Step Lifecycle)",
+                    style = KidsGTypography.TitleSmall.copy(fontWeight = FontWeight.Bold, color = KidsGColors.BlackText),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
                 TrackingTimelineItem(
-                    title = "Order Placed",
-                    time = "10:30 AM",
+                    title = "1. Order Received",
+                    time = "Order created & logged in BookBuddys Bengaluru",
                     isCompleted = true,
                     isCurrent = false
                 )
                 TrackingTimelineItem(
-                    title = "Packed at Vidya Depot",
-                    time = "10:36 AM",
+                    title = "2. Payment Pending",
+                    time = "Awaiting UPI payment submission",
                     isCompleted = true,
                     isCurrent = false
                 )
                 TrackingTimelineItem(
-                    title = "Shipped with Rider",
-                    time = "10:41 AM",
+                    title = "3. Payment Submitted",
+                    time = "12-digit UTR reference recorded",
                     isCompleted = true,
                     isCurrent = false
                 )
                 TrackingTimelineItem(
-                    title = "Out for Delivery",
-                    time = "Live • Rider on way",
+                    title = "4. Payment Verified",
+                    time = "Payment confirmed by BookBuddys Founder Desk",
+                    isCompleted = true,
+                    isCurrent = false
+                )
+                TrackingTimelineItem(
+                    title = "5. Order Accepted",
+                    time = "Partner Hub accepted order items",
+                    isCompleted = true,
+                    isCurrent = false
+                )
+                TrackingTimelineItem(
+                    title = "6. Packing at Hub",
+                    time = "Stationery items gathered & sanitized",
+                    isCompleted = true,
+                    isCurrent = false
+                )
+                TrackingTimelineItem(
+                    title = "7. Ready for Pickup",
+                    time = "Package sealed & staged at partner store",
+                    isCompleted = true,
+                    isCurrent = false
+                )
+                TrackingTimelineItem(
+                    title = "8. Delivery Partner Booked",
+                    time = "Hyperlocal Bengaluru courier assigned",
+                    isCompleted = true,
+                    isCurrent = false
+                )
+                TrackingTimelineItem(
+                    title = "9. Out for Delivery",
+                    time = "Live • Rider en route with your package",
                     isCompleted = false,
                     isCurrent = true
                 )
                 TrackingTimelineItem(
-                    title = "Delivered to Desk",
-                    time = "Expected by 10:55 AM",
+                    title = "10. Delivered to Desk",
+                    time = "Expected delivery to student desk in 25 mins",
                     isCompleted = false,
                     isCurrent = false,
                     isLast = true
                 )
+            }
+
+            Spacer(modifier = Modifier.height(KidsGSpacing.md))
+
+            // Partner Hub Card & WhatsApp Support Action
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = KidsGSpacing.lg)
+                    .clip(KidsGShapes.CardRounded)
+                    .background(Color(0xFFFFF7ED))
+                    .border(1.dp, Color(0xFFFFD8A8), KidsGShapes.CardRounded)
+                    .padding(KidsGSpacing.md)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "🏪", fontSize = 18.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Fulfilling Hub: BookBuddys Partner Store",
+                            style = KidsGTypography.TitleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Bengaluru Hyperlocal Network • Within 8.0 km radius",
+                            style = KidsGTypography.Caption.copy(color = KidsGColors.TextSecondary)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(KidsGShapes.Small)
+                        .background(Color(0xFF25D366))
+                        .clickable { /* WhatsApp action */ }
+                        .padding(vertical = 10.dp, horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "💬", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "WhatsApp Support (+91 9353919178)",
+                            style = KidsGTypography.TitleSmall.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(KidsGSpacing.md))

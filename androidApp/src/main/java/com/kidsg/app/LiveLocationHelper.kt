@@ -139,13 +139,18 @@ object LiveLocationHelper {
 
     private fun formatAddress(address: android.location.Address?): String {
         if (address == null) return ""
-        val subLocality = address.subLocality ?: address.thoroughfare
-        val locality = address.locality ?: address.subAdminArea ?: address.adminArea
-        return when {
-            !subLocality.isNullOrBlank() && !locality.isNullOrBlank() -> "$subLocality, $locality"
-            !locality.isNullOrBlank() -> locality
-            !subLocality.isNullOrBlank() -> subLocality
-            else -> address.featureName ?: "Bengaluru"
+        val line0 = address.getAddressLine(0)?.trim()
+        if (!line0.isNullOrBlank()) {
+            return line0
         }
+        val feature = address.featureName?.takeIf { it.isNotBlank() }
+        val thoroughfare = address.thoroughfare?.takeIf { it.isNotBlank() }
+        val subLocality = address.subLocality?.takeIf { it.isNotBlank() }
+        val locality = address.locality?.takeIf { it.isNotBlank() } ?: address.subAdminArea?.takeIf { it.isNotBlank() }
+        val state = address.adminArea?.takeIf { it.isNotBlank() }
+        val postalCode = address.postalCode?.takeIf { it.isNotBlank() }
+
+        val parts = listOfNotNull(feature ?: thoroughfare ?: subLocality, locality, state, postalCode).distinct()
+        return if (parts.isNotEmpty()) parts.joinToString(", ") else "Live Device Location"
     }
 }

@@ -80,6 +80,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProfileScreen(
     userProfile: UserProfile?,
+    currentLocation: String = "Live Location",
+    onLocationClick: () -> Unit = {},
     onNavigateToAddresses: () -> Unit,
     onNavigateToOrders: () -> Unit,
     onNavigateToHelp: () -> Unit,
@@ -131,6 +133,98 @@ fun ProfileScreen(
                 onPreferencesClick = { showPreferencesDialog = true },
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2b. Live Location Details Card (Accurate Full Location)
+            val isBengaluruCoverage = currentLocation.contains("Bengaluru", ignoreCase = true) ||
+                    currentLocation.contains("Bangalore", ignoreCase = true)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color.White)
+                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(20.dp))
+                    .padding(18.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "📍", fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Current Delivery Location",
+                                style = KidsGTypography.TitleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isBengaluruCoverage) Color(0xFFDCFCE7) else Color(0xFFFEF3C7))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (isBengaluruCoverage) "HYPERLOCAL" else "OUTSIDE HUB",
+                                color = if (isBengaluruCoverage) Color(0xFF15803D) else Color(0xFFB45309),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = currentLocation,
+                        style = KidsGTypography.BodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF1E293B),
+                            lineHeight = 20.sp
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (isBengaluruCoverage)
+                            "✓ Active within BookBuddys Bengaluru Hub network (45-90 min rapid delivery to student desk)."
+                        else
+                            "📍 You are currently outside Bengaluru. Orders will be fulfilled via Express Postal / Courier Delivery.",
+                        style = KidsGTypography.Caption.copy(
+                            color = if (isBengaluruCoverage) Color(0xFF059669) else Color(0xFFD97706),
+                            fontSize = 11.sp
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFFF7ED))
+                            .clickable(onClick = onLocationClick)
+                            .padding(vertical = 10.dp, horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Change or Detect Live GPS ↻",
+                            style = KidsGTypography.Caption.copy(
+                                color = KidsGColors.OrangePrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
