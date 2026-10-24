@@ -6686,7 +6686,7 @@ app.use((_req, res) => {
 });
 app.use((err, _req, res, _next) => {
   Logger.error("Unhandled Exception", err);
-  sendError(res, "Internal server error occurred", "INTERNAL_ERROR", 500);
+  sendError(res, err?.message || "Internal server error occurred", "INTERNAL_ERROR", 500);
 });
 if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
   const port = env.PORT;

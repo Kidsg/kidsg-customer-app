@@ -114,7 +114,7 @@ app.use((_req: Request, res: Response) => {
 // Global Error Handler
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   Logger.error('Unhandled Exception', err);
-  sendError(res, 'Internal server error occurred', 'INTERNAL_ERROR', 500);
+  sendError(res, err?.message || 'Internal server error occurred', 'INTERNAL_ERROR', 500);
 });
 
 // Start Server locally
