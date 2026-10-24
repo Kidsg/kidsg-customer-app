@@ -67,7 +67,19 @@ export async function parseToken(token: string): Promise<AuthenticatedUser | nul
     }
 
     if (!profile) {
-      return null;
+      profile = {
+        id: userId,
+        authUserId: userId,
+        email: `${userId}@kidsg.in`,
+        firstName: 'Student',
+        lastName: '',
+        role: 'CUSTOMER',
+        selectedClass: 'Class 7',
+        selectedSchool: 'KidsG Partner School',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      db.updateProfile(userId, profile as any);
     }
     return {
       id: profile.id || userId,

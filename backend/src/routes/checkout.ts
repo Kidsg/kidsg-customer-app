@@ -51,43 +51,47 @@ import { syncOrderToSupabase } from '../lib/supabaseSync.js';
 
 // POST /api/checkout/create
 router.post('/checkout/create', requireAuth(), async (req: Request, res: Response) => {
-  const result = checkoutCreateSchema.safeParse(req.body);
-  if (!result.success) {
-    sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
-    return;
-  }
-
-  const { addressId, couponCode, paymentMethod, notes, items, deliveryAddress } = result.data;
-  const orderRes = db.createOrder(
-    req.user!.id,
-    addressId || 'addr_default',
-    paymentMethod,
-    couponCode || undefined,
-    notes || undefined,
-    items,
-    deliveryAddress
-  );
-
-  if (!orderRes.success || !orderRes.order) {
-    sendError(res, orderRes.error || 'Failed to initialize checkout', 'CHECKOUT_FAILED', 400);
-    return;
-  }
-
-  const userEmail = req.user?.email || 'student@kidsg.in';
-  // Synchronously await Supabase write to guarantee instant DB visibility
   try {
-    await syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress);
-  } catch (e: any) {
-    console.warn('[KidsG][Supabase] Checkout sync notice:', e?.message);
-  }
+    const result = checkoutCreateSchema.safeParse(req.body);
+    if (!result.success) {
+      sendError(res, result.error.errors[0].message, 'VALIDATION_ERROR', 400);
+      return;
+    }
 
-  sendSuccess(res, {
-    orderId: orderRes.order.id,
-    orderNumber: orderRes.order.orderNumber,
-    total: orderRes.order.total,
-    paymentMethod: orderRes.order.paymentMethod,
-    order: orderRes.order,
-  }, 'Checkout initiated successfully', 201);
+    const { addressId, couponCode, paymentMethod, notes, items, deliveryAddress } = result.data;
+    const orderRes = db.createOrder(
+      req.user!.id,
+      addressId || 'addr_default',
+      paymentMethod,
+      couponCode || undefined,
+      notes || undefined,
+      items,
+      deliveryAddress
+    );
+
+    if (!orderRes.success || !orderRes.order) {
+      sendError(res, orderRes.error || 'Failed to initialize checkout', 'CHECKOUT_FAILED', 400);
+      return;
+    }
+
+    const userEmail = req.user?.email || 'student@kidsg.in';
+    try {
+      await syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress);
+    } catch (e: any) {
+      console.warn('[KidsG][Supabase] Checkout sync notice:', e?.message);
+    }
+
+    sendSuccess(res, {
+      orderId: orderRes.order.id,
+      orderNumber: orderRes.order.orderNumber,
+      total: orderRes.order.total,
+      paymentMethod: orderRes.order.paymentMethod,
+      order: orderRes.order,
+    }, 'Checkout initiated successfully', 201);
+  } catch (err: any) {
+    console.error('[KidsG][Checkout] Exception:', err);
+    sendError(res, err?.message || 'Checkout failed', 'CHECKOUT_ERROR', 500);
+  }
 });
 
 export default router;

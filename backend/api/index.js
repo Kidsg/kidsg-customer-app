@@ -3340,7 +3340,19 @@ async function parseToken(token) {
       }
     }
     if (!profile) {
-      return null;
+      profile = {
+        id: userId,
+        authUserId: userId,
+        email: `${userId}@kidsg.in`,
+        firstName: "Student",
+        lastName: "",
+        role: "CUSTOMER",
+        selectedClass: "Class 7",
+        selectedSchool: "KidsG Partner School",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      db.updateProfile(userId, profile);
     }
     return {
       id: profile.id || userId,
@@ -4774,38 +4786,43 @@ router11.post("/checkout/preview", requireAuth(), (req, res) => {
   });
 });
 router11.post("/checkout/create", requireAuth(), async (req, res) => {
-  const result = checkoutCreateSchema.safeParse(req.body);
-  if (!result.success) {
-    sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
-    return;
-  }
-  const { addressId, couponCode, paymentMethod, notes, items, deliveryAddress } = result.data;
-  const orderRes = db.createOrder(
-    req.user.id,
-    addressId || "addr_default",
-    paymentMethod,
-    couponCode || void 0,
-    notes || void 0,
-    items,
-    deliveryAddress
-  );
-  if (!orderRes.success || !orderRes.order) {
-    sendError(res, orderRes.error || "Failed to initialize checkout", "CHECKOUT_FAILED", 400);
-    return;
-  }
-  const userEmail = req.user?.email || "student@kidsg.in";
   try {
-    await syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress);
-  } catch (e) {
-    console.warn("[KidsG][Supabase] Checkout sync notice:", e?.message);
+    const result = checkoutCreateSchema.safeParse(req.body);
+    if (!result.success) {
+      sendError(res, result.error.errors[0].message, "VALIDATION_ERROR", 400);
+      return;
+    }
+    const { addressId, couponCode, paymentMethod, notes, items, deliveryAddress } = result.data;
+    const orderRes = db.createOrder(
+      req.user.id,
+      addressId || "addr_default",
+      paymentMethod,
+      couponCode || void 0,
+      notes || void 0,
+      items,
+      deliveryAddress
+    );
+    if (!orderRes.success || !orderRes.order) {
+      sendError(res, orderRes.error || "Failed to initialize checkout", "CHECKOUT_FAILED", 400);
+      return;
+    }
+    const userEmail = req.user?.email || "student@kidsg.in";
+    try {
+      await syncOrderToSupabase(userEmail, orderRes.order, deliveryAddress);
+    } catch (e) {
+      console.warn("[KidsG][Supabase] Checkout sync notice:", e?.message);
+    }
+    sendSuccess(res, {
+      orderId: orderRes.order.id,
+      orderNumber: orderRes.order.orderNumber,
+      total: orderRes.order.total,
+      paymentMethod: orderRes.order.paymentMethod,
+      order: orderRes.order
+    }, "Checkout initiated successfully", 201);
+  } catch (err) {
+    console.error("[KidsG][Checkout] Exception:", err);
+    sendError(res, err?.message || "Checkout failed", "CHECKOUT_ERROR", 500);
   }
-  sendSuccess(res, {
-    orderId: orderRes.order.id,
-    orderNumber: orderRes.order.orderNumber,
-    total: orderRes.order.total,
-    paymentMethod: orderRes.order.paymentMethod,
-    order: orderRes.order
-  }, "Checkout initiated successfully", 201);
 });
 var checkout_default = router11;
 
