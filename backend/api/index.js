@@ -189,10 +189,10 @@ if (isConfigured) {
 var supabaseAdmin = supabaseClient;
 
 // src/lib/supabaseSync.ts
-import { randomUUID as randomUUID3 } from "crypto";
+import { randomUUID as randomUUID2 } from "crypto";
 
 // src/lib/db.ts
-import { randomUUID as randomUUID2, scryptSync, randomBytes } from "crypto";
+import { randomUUID, scryptSync, randomBytes } from "crypto";
 function calculateDistanceKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -1165,7 +1165,7 @@ var KidsGDatabase = class {
   addProductReview(productId, review) {
     const newReview = {
       ...review,
-      id: `rev_${randomUUID2()}`,
+      id: `rev_${randomUUID()}`,
       productId
     };
     const current = this.reviews.get(productId) || [];
@@ -1199,7 +1199,7 @@ var KidsGDatabase = class {
   }
   addProductQa(productId, question) {
     const newQa = {
-      id: `qa_${randomUUID2()}`,
+      id: `qa_${randomUUID()}`,
       productId,
       question,
       answer: "Thank you for asking! Our verified stationery curator will review and post an answer shortly.",
@@ -1338,7 +1338,7 @@ var KidsGDatabase = class {
       existing.quantity += quantity;
     } else {
       items.push({
-        id: `cart_item_${randomUUID2().substring(0, 8)}`,
+        id: `cart_item_${randomUUID().substring(0, 8)}`,
         productId,
         quantity,
         selectedVariant: variant
@@ -1443,7 +1443,7 @@ var KidsGDatabase = class {
     const list = this.addresses.get(userId) || [];
     const newAddress = {
       ...address,
-      id: `addr_${randomUUID2().substring(0, 8)}`,
+      id: `addr_${randomUUID().substring(0, 8)}`,
       userId
     };
     if (newAddress.isDefault || list.length === 0) {
@@ -1517,7 +1517,7 @@ var KidsGDatabase = class {
         }
       }
       const itemsList = clientItems.map((ci) => ({
-        id: `cart_item_${randomUUID2().substring(0, 8)}`,
+        id: `cart_item_${randomUUID().substring(0, 8)}`,
         productId: ci.productId,
         quantity: ci.quantity || 1,
         selectedVariant: ci.selectedVariant || void 0
@@ -1560,10 +1560,10 @@ var KidsGDatabase = class {
       });
     }
     const store = this.stores[0];
-    const orderId = `ord_${randomUUID2().substring(0, 10)}`;
+    const orderId = `ord_${randomUUID().substring(0, 10)}`;
     const orderNumber = `KG-${(/* @__PURE__ */ new Date()).getFullYear()}-${Math.floor(1e5 + Math.random() * 9e5)}`;
     const orderItems = checkout.items.map((i) => ({
-      id: `item_${randomUUID2().substring(0, 8)}`,
+      id: `item_${randomUUID().substring(0, 8)}`,
       productId: i.productId,
       productName: i.product?.name || "Stationery Item",
       price: i.product?.price || 0,
@@ -1596,7 +1596,7 @@ var KidsGDatabase = class {
     this.orders.set(orderId, order);
     this.clearCart(userId);
     const paymentRecord = {
-      id: `pay_${randomUUID2().substring(0, 10)}`,
+      id: `pay_${randomUUID().substring(0, 10)}`,
       orderId,
       userId,
       amount: checkout.total,
@@ -1724,7 +1724,7 @@ var KidsGDatabase = class {
   // --- Order Status History & Payments ---
   addOrderStatusHistory(orderId, status, message, createdBy = "SYSTEM") {
     const historyItem = {
-      id: `hist_${randomUUID2().substring(0, 8)}`,
+      id: `hist_${randomUUID().substring(0, 8)}`,
       orderId,
       status,
       message,
@@ -1809,7 +1809,7 @@ var KidsGDatabase = class {
     if (!params.password || params.password.length < 6) {
       return { success: false, error: "Password must be at least 6 characters" };
     }
-    const userId = `user_${randomUUID2().substring(0, 10)}`;
+    const userId = `user_${randomUUID().substring(0, 10)}`;
     const salt = randomBytes(16).toString("hex");
     const passwordHash = this.hashPassword(params.password, salt);
     this.userCredentials.set(emailKey, {
@@ -1924,7 +1924,7 @@ var KidsGDatabase = class {
   // --- Support Tickets ---
   createSupportTicket(userId, subject, message, orderId) {
     const ticket = {
-      id: `tkt_${randomUUID2().substring(0, 8)}`,
+      id: `tkt_${randomUUID().substring(0, 8)}`,
       ticketNumber: `KG-SUP-${Math.floor(1e4 + Math.random() * 9e4)}`,
       userId,
       orderId,
@@ -1951,7 +1951,7 @@ var KidsGDatabase = class {
     return this.stores.find((s) => s.id === id);
   }
   createStore(data, adminId = "user_founder_01") {
-    const storeId = data.id || `store_${randomUUID2().substring(0, 8)}`;
+    const storeId = data.id || `store_${randomUUID().substring(0, 8)}`;
     const newStore = {
       id: storeId,
       code: data.code || `BB-SHP-${Math.floor(10 + Math.random() * 90)}`,
@@ -2165,7 +2165,7 @@ var KidsGDatabase = class {
     return this.products;
   }
   createProduct(data, adminId = "user_founder_01") {
-    const prodId = data.id || `prod_${randomUUID2().substring(0, 8)}`;
+    const prodId = data.id || `prod_${randomUUID().substring(0, 8)}`;
     const slug = data.slug || (data.name ? data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : prodId);
     const newProd = {
       id: prodId,
@@ -2372,7 +2372,7 @@ var KidsGDatabase = class {
   submitManualPayment(orderId, userId, data) {
     const order = this.orders.get(orderId);
     if (!order) return { success: false, error: "Order not found" };
-    const submissionId = `pay_sub_${randomUUID2().substring(0, 8)}`;
+    const submissionId = `pay_sub_${randomUUID().substring(0, 8)}`;
     const sub = {
       id: submissionId,
       orderId,
@@ -2420,7 +2420,7 @@ var KidsGDatabase = class {
       order.paymentStatus = "PAYMENT_VERIFIED";
       order.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
       this.addPaymentRecord({
-        id: `pay_${randomUUID2().substring(0, 8)}`,
+        id: `pay_${randomUUID().substring(0, 8)}`,
         orderId: order.id,
         userId: order.userId,
         amount: sub.amount,
@@ -2493,7 +2493,7 @@ var KidsGDatabase = class {
     if (!order) return { success: false, error: "Order not found" };
     const store = this.getStoreById(order.storeId) || this.stores[0];
     const booking = {
-      id: `del_${randomUUID2().substring(0, 8)}`,
+      id: `del_${randomUUID().substring(0, 8)}`,
       orderId,
       orderNumber: order.orderNumber,
       provider: bookingData.provider || "PORTER",
@@ -2590,7 +2590,7 @@ var KidsGDatabase = class {
   addAuditLog(entry) {
     const log = {
       ...entry,
-      id: `audit_${randomUUID2().substring(0, 8)}`,
+      id: `audit_${randomUUID().substring(0, 8)}`,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.auditLogs.unshift(log);
@@ -2872,7 +2872,7 @@ async function syncOrderToSupabase(userEmail, order, clientAddress) {
         const catId = catData?.id || "c0000000-0000-0000-0000-000000000001";
         const { data: newProd } = await supabaseAdmin.from("products").insert({
           name: item.product?.name || item.productName || "Classmate Stationery",
-          slug: prodSlug || `prod_${randomUUID3().substring(0, 8)}`,
+          slug: prodSlug || `prod_${randomUUID2().substring(0, 8)}`,
           description: item.product?.description || "School stationery item",
           brand: item.product?.brand || "Classmate",
           category_id: catId,
@@ -2901,8 +2901,8 @@ async function syncOrderToSupabase(userEmail, order, clientAddress) {
       order_id: orderDbId,
       user_id: profileId,
       provider: order.paymentMethod?.toLowerCase() || "mock",
-      transaction_id: `txn_${randomUUID3().substring(0, 10)}`,
-      gateway_order_id: `gpay_${randomUUID3().substring(0, 8)}`,
+      transaction_id: `txn_${randomUUID2().substring(0, 10)}`,
+      gateway_order_id: `gpay_${randomUUID2().substring(0, 8)}`,
       amount: order.total,
       currency: "INR",
       status: order.paymentStatus || "SUCCESS",
@@ -3283,6 +3283,7 @@ var health_default = router;
 // src/routes/auth.ts
 import { Router as Router2 } from "express";
 import { z as z2 } from "zod";
+import { randomUUID as randomUUID3 } from "crypto";
 
 // src/middleware/auth.ts
 function extractBearerToken(req) {
@@ -4082,7 +4083,7 @@ router2.post("/auth/verify-otp", rateLimit(20, 6e4, "auth_verify_otp"), async (r
   } catch (e) {
     console.warn("[KidsG][Supabase] Profile lookup during verify-otp notice:", e?.message);
   }
-  const userId = `user_${randomUUID().substring(0, 10)}`;
+  const userId = `user_${randomUUID3().substring(0, 10)}`;
   const userEmail = emailClean || (contact.includes("@") ? contact : `${contact.replace(/\D/g, "")}@kidsg.in`);
   const userPhone = phoneClean || (contact.includes("@") ? "" : contact);
   const newUser = {
