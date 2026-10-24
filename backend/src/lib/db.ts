@@ -1829,7 +1829,7 @@ export class KidsGDatabase {
       });
     }
 
-    const store = this.stores[0];
+    const store = (this.stores && this.stores.length > 0) ? this.stores[0] : { id: 'store_01', name: 'KidsG Hub', address: 'Bazaar Street, Malur' };
     const orderId = `ord_${randomUUID().substring(0, 10)}`;
     const orderNumber = `KG-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -1848,8 +1848,8 @@ export class KidsGDatabase {
       id: orderId,
       orderNumber,
       userId,
-      storeId: store.id,
-      storeName: store.name,
+      storeId: store?.id || 'store_01',
+      storeName: store?.name || 'KidsG Hub',
       status: initialStatus,
       subtotal: checkout.subtotal,
       discount: checkout.discount,
