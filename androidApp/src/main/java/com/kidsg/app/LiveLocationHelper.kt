@@ -11,13 +11,10 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.os.Looper
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.CurrentLocationRequest
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
 import com.kidsg.core.storage.SessionStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +24,12 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.function.Consumer
 
+/**
+ * 100% Native Android Location Resolver.
+ * Uses built-in Android OS LocationManager and Geocoder with zero external play-services dependencies.
+ */
 object LiveLocationHelper {
     const val REQUEST_CODE_LOCATION = 1001
 
@@ -66,47 +68,6 @@ object LiveLocationHelper {
         scope: CoroutineScope,
         onLocationResolved: (String) -> Unit
     ) {
-        // Method 1: Google Play Services FusedLocationProviderClient (Immediate & Most Accurate)
-        try {
-            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-            val cancellationTokenSource = CancellationTokenSource()
-
-            val request = CurrentLocationRequest.Builder()
-                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
-                .setMaxUpdateAgeMillis(15_000)
-                .build()
-
-            fusedClient.getCurrentLocation(request, cancellationTokenSource.token)
-                .addOnSuccessListener { loc ->
-                    if (loc != null) {
-                        resolveAddress(context, loc, scope, onLocationResolved)
-                    } else {
-                        // Fallback to lastLocation
-                        fusedClient.lastLocation.addOnSuccessListener { lastLoc ->
-                            if (lastLoc != null) {
-                                resolveAddress(context, lastLoc, scope, onLocationResolved)
-                            } else {
-                                fallbackToLocationManager(context, scope, onLocationResolved)
-                            }
-                        }.addOnFailureListener {
-                            fallbackToLocationManager(context, scope, onLocationResolved)
-                        }
-                    }
-                }
-                .addOnFailureListener {
-                    fallbackToLocationManager(context, scope, onLocationResolved)
-                }
-        } catch (_: Exception) {
-            fallbackToLocationManager(context, scope, onLocationResolved)
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun fallbackToLocationManager(
-        context: Context,
-        scope: CoroutineScope,
-        onLocationResolved: (String) -> Unit
-    ) {
         try {
             val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             if (locationManager == null) {
@@ -114,6 +75,7 @@ object LiveLocationHelper {
                 return
             }
 
+            // 1. Immediately check best cached location from all active providers
             var bestLocation: Location? = null
             val providers = locationManager.getProviders(true)
             for (p in providers) {
@@ -125,36 +87,53 @@ object LiveLocationHelper {
 
             if (bestLocation != null) {
                 resolveAddress(context, bestLocation, scope, onLocationResolved)
-                return
             }
 
-            val activeProvider = when {
+            // 2. Request real-time hardware location update from available providers
+            val targetProvider = when {
                 locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
                 locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-                else -> null
+                else -> providers.firstOrNull()
             }
 
-            if (activeProvider != null) {
-                val listener = object : LocationListener {
-                    override fun onLocationChanged(loc: Location) {
-                        resolveAddress(context, loc, scope, onLocationResolved)
-                        try {
-                            locationManager.removeUpdates(this)
-                        } catch (_: Exception) {}
+            if (targetProvider != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    // Native Android 11+ one-shot high-accuracy location (zero play services required)
+                    val signal = CancellationSignal()
+                    locationManager.getCurrentLocation(
+                        targetProvider,
+                        signal,
+                        context.mainExecutor,
+                        Consumer<Location?> { location ->
+                            if (location != null) {
+                                resolveAddress(context, location, scope, onLocationResolved)
+                            }
+                        }
+                    )
+                } else {
+                    // Android 10 and below standard updates with Looper.getMainLooper()
+                    val listener = object : LocationListener {
+                        override fun onLocationChanged(loc: Location) {
+                            resolveAddress(context, loc, scope, onLocationResolved)
+                            try {
+                                locationManager.removeUpdates(this)
+                            } catch (_: Exception) {}
+                        }
+                        @Deprecated("Deprecated in Java")
+                        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                        override fun onProviderEnabled(provider: String) {}
+                        override fun onProviderDisabled(provider: String) {}
                     }
-                    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-                    override fun onProviderEnabled(provider: String) {}
-                    override fun onProviderDisabled(provider: String) {}
-                }
 
-                locationManager.requestLocationUpdates(
-                    activeProvider,
-                    0L,
-                    0f,
-                    listener,
-                    Looper.getMainLooper()
-                )
-            } else {
+                    locationManager.requestLocationUpdates(
+                        targetProvider,
+                        0L,
+                        0f,
+                        listener,
+                        Looper.getMainLooper()
+                    )
+                }
+            } else if (bestLocation == null) {
                 fallbackToIpLocation(scope, onLocationResolved)
             }
         } catch (_: Exception) {
@@ -194,7 +173,7 @@ object LiveLocationHelper {
                     }
                 }
             } catch (_: Exception) {
-                // If native geocoder fails, try reverse geocoding via OpenStreetMap Nominatim
+                // Network reverse geocoding fallback if native geocoder times out
                 try {
                     val url = URL("https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}&addressdetails=1")
                     val conn = url.openConnection() as HttpURLConnection
@@ -210,7 +189,6 @@ object LiveLocationHelper {
                             withContext(Dispatchers.Main) {
                                 onLocationResolved(displayName)
                             }
-                            return@launch
                         }
                     }
                 } catch (_: Exception) {}
@@ -234,7 +212,11 @@ object LiveLocationHelper {
                     val city = json.optString("city", "")
                     val region = json.optString("region", "")
                     val postal = json.optString("postal", "")
-                    val parts = listOfNotNull(city.takeIf { it.isNotBlank() }, region.takeIf { it.isNotBlank() }, postal.takeIf { it.isNotBlank() })
+                    val parts = listOfNotNull(
+                        city.takeIf { it.isNotBlank() },
+                        region.takeIf { it.isNotBlank() },
+                        postal.takeIf { it.isNotBlank() }
+                    )
                     if (parts.isNotEmpty()) {
                         val result = parts.joinToString(", ")
                         SessionStorage.saveCurrentLocation(result)
@@ -249,7 +231,7 @@ object LiveLocationHelper {
 
     private fun formatAddress(address: android.location.Address?): String {
         if (address == null) return ""
-        // Get complete, minute, detailed address line (street, area, city, district, state, pin)
+        // Get complete, detailed address line (street, locality, district, state, pin)
         val fullLine = address.getAddressLine(0)?.trim()
         if (!fullLine.isNullOrBlank()) {
             return fullLine
