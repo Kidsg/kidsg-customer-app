@@ -111,28 +111,27 @@ fun KidsGApp(
     }
 
     androidx.compose.runtime.LaunchedEffect(currentUser, currentLocation) {
-        if (selectedDeliveryAddress == null) {
-            val studentName = currentUser?.studentName?.takeIf { it.isNotBlank() }
-                ?: currentUser?.name?.takeIf { it.isNotBlank() }
-                ?: "Student Desk"
-            val phone = currentUser?.phone?.takeIf { it.isNotBlank() } ?: "9876543210"
-            val school = currentUser?.schoolName?.takeIf { it.isNotBlank() }
-                ?: currentUser?.studentGrade?.takeIf { it.isNotBlank() }
-                ?: currentLocation
-            val defaultAddr = Address(
-                id = "addr_default",
-                label = "Home",
-                recipientName = studentName,
-                phoneNumber = phone,
-                addressLine1 = school.ifBlank { "12, Green Park" },
-                addressLine2 = currentUser?.studentGrade ?: "",
-                city = "Bengaluru",
-                pincode = "560001",
-                isDefault = true
-            )
-            selectedDeliveryAddress = defaultAddr
-            SessionStorage.saveSelectedAddress(defaultAddr)
-        }
+        val studentName = currentUser?.studentName?.takeIf { it.isNotBlank() }
+            ?: currentUser?.name?.takeIf { it.isNotBlank() }
+            ?: "Student Desk"
+        val phone = currentUser?.phone?.takeIf { it.isNotBlank() } ?: "+91 9353919178"
+        val isMalur = currentLocation.contains("Malur", ignoreCase = true)
+        val city = if (isMalur) "Malur" else if (currentLocation.contains("Bengaluru", ignoreCase = true)) "Bengaluru" else "Malur"
+        val pin = if (isMalur) "563130" else if (currentLocation.contains("560")) "560001" else "563130"
+
+        val defaultAddr = Address(
+            id = "addr_default",
+            label = "Home",
+            recipientName = studentName,
+            phoneNumber = phone,
+            addressLine1 = currentLocation,
+            addressLine2 = currentUser?.studentGrade?.takeIf { it.isNotBlank() } ?: "Class 7",
+            city = city,
+            pincode = pin,
+            isDefault = true
+        )
+        selectedDeliveryAddress = defaultAddr
+        SessionStorage.saveSelectedAddress(defaultAddr)
     }
 
     val isTopLevelScreen = currentScreen is Screen.Home ||

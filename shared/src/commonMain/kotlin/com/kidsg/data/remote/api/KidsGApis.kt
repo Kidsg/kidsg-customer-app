@@ -285,3 +285,11 @@ class AddressApi {
     suspend fun addAddress(address: AddressDto): ApiResult<AddressDto> =
         safeApiCallWithBody(HttpMethod.Post, Endpoints.ADDRESSES, bodyData = address)
 }
+
+class ProfileApi {
+    suspend fun getProfile(): ApiResult<ProfileDto> =
+        safeApiCall(HttpMethod.Get, Endpoints.PROFILE)
+
+    suspend fun updateProfile(request: UpdateProfileRequestDto): ApiResult<ProfileDto> =
+        safeApiCallWithBody(HttpMethod.Patch, Endpoints.PROFILE, bodyData = request)
+}

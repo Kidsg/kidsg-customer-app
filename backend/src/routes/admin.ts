@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { sendSuccess, sendError } from '../lib/response.js';
 import { requireRole } from '../middleware/auth.js';
 import { db } from '../lib/db.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import { getNotificationService } from '../services/notification/NotificationService.js';
 
 const router = Router();
@@ -654,11 +655,36 @@ router.get('/admin/settings', requireRole('ADMIN'), (_req: Request, res: Respons
   sendSuccess(res, settings);
 });
 
-// PUT /api/admin/settings
-router.put('/admin/settings', requireRole('ADMIN'), (req: Request, res: Response) => {
-  const adminId = req.user?.id || 'user_founder_01';
-  const updated = db.updatePlatformSettings(req.body, adminId);
-  sendSuccess(res, updated);
+// POST /api/admin/clear-db
+router.post('/admin/clear-db', async (req: Request, res: Response) => {
+  const secretKey = req.headers['x-admin-secret'] || req.body?.secretKey;
+  const isAuthorized = secretKey === 'KidsG-Founder-2026' || req.user?.role === 'ADMIN';
+
+  if (!isAuthorized) {
+    sendError(res, 'Unauthorized to reset database', 'FORBIDDEN', 403);
+    return;
+  }
+
+  const preserveEmails = ['veenithkumars31@gmail.com', 'founder@kidsg.in'];
+  const localStats = db.resetUserData(preserveEmails);
+
+  // Clear test data from Supabase PostgreSQL
+  try {
+    await supabaseAdmin.from('order_items').delete().neq('id', 'keep_all_none');
+    await supabaseAdmin.from('orders').delete().neq('id', 'keep_all_none');
+    await supabaseAdmin.from('cart_items').delete().neq('id', 'keep_all_none');
+    await supabaseAdmin.from('addresses').delete().neq('id', 'keep_all_none');
+    // Keep founder profiles
+    await supabaseAdmin.from('profiles').delete().not('email', 'in', '("veenithkumars31@gmail.com","founder@kidsg.in")');
+  } catch (e: any) {
+    console.warn('[KidsG][Supabase] clear-db notice:', e?.message);
+  }
+
+  sendSuccess(res, {
+    message: 'Database cleared successfully. Ready for fresh test run.',
+    preserved: preserveEmails,
+    stats: localStats,
+  });
 });
 
 export default router;

@@ -57,11 +57,11 @@ fun LocationSelectionDialog(
     val coroutineScope = rememberCoroutineScope()
 
     val quickAddresses = listOf(
-        "Bazaar Street, Malur, Karnataka",
+        "Bazaar Street, Malur, Karnataka - 563130",
         "Gandhi Chowk, Malur, Kolar District",
-        "HSR Layout, Sector 3, Bengaluru",
-        "Koramangala 4th Block, Bengaluru",
-        "Indiranagar, 100ft Road, Bengaluru"
+        "Railway Station Road, Malur, Karnataka - 563130",
+        "HSR Layout, Sector 3, Bengaluru - 560102",
+        "Koramangala 4th Block, Bengaluru - 560034"
     )
 
     Dialog(onDismissRequest = onDismiss) {

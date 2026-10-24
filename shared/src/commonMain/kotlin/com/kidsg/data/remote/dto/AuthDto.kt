@@ -96,3 +96,13 @@ data class SignupRequestDto(
     val selectedClass: String = "Class 7",
     val selectedSchool: String = "KidsG Partner School"
 )
+
+@Serializable
+data class UpdateProfileRequestDto(
+    val firstName: String? = null,
+    val lastName: String? = null,
+    val email: String? = null,
+    val selectedClass: String? = null,
+    val selectedSchool: String? = null,
+    val avatarUrl: String? = null
+)

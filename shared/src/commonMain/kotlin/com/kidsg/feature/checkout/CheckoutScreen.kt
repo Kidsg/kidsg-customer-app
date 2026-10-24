@@ -67,15 +67,20 @@ fun CheckoutScreen(
         ?: "Aarav Kumar"
     val phone = userProfile?.phone?.takeIf { it.isNotBlank() } ?: "9876543210"
 
+    val liveLoc = com.kidsg.core.storage.SessionStorage.getCurrentLocation() ?: "Malur, Karnataka"
+    val isMalur = liveLoc.contains("Malur", ignoreCase = true)
+    val city = if (isMalur) "Malur" else if (liveLoc.contains("Bengaluru", ignoreCase = true)) "Bengaluru" else "Malur"
+    val pin = if (isMalur) "563130" else if (liveLoc.contains("560")) "560001" else "563130"
+
     val effectiveAddress = selectedAddress ?: Address(
         id = "addr_default",
         label = "Home",
         recipientName = studentName,
         phoneNumber = phone,
-        addressLine1 = userProfile?.schoolName?.takeIf { it.isNotBlank() } ?: "12, Green Park",
-        addressLine2 = userProfile?.studentGrade?.takeIf { it.isNotBlank() } ?: "",
-        city = "Bangalore",
-        pincode = "560001",
+        addressLine1 = liveLoc,
+        addressLine2 = userProfile?.studentGrade?.takeIf { it.isNotBlank() } ?: "Class 7",
+        city = city,
+        pincode = pin,
         isDefault = true
     )
 

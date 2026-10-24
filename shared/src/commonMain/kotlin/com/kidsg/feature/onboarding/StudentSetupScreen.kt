@@ -371,16 +371,24 @@ fun StudentSetupScreen(
                     }
                     errorMessage = null
                     coroutineScope.launch {
-                        val updated = (initialProfile ?: UserProfile(
-                            id = "user_${studentName.replace(" ", "_").lowercase()}",
+                        val currentAuthUser = authRepository.currentUser.value
+                        val persistentId = currentAuthUser?.id?.takeIf { it.isNotBlank() && it != "user_id" }
+                            ?: com.kidsg.core.storage.SessionStorage.getUserProfile()?.id?.takeIf { it.isNotBlank() && it != "user_id" }
+                            ?: "user_${studentName.replace(" ", "_").lowercase()}"
+
+                        val base = initialProfile ?: currentAuthUser ?: UserProfile(
+                            id = persistentId,
                             name = studentName.trim(),
-                            phone = initialProfile?.phone ?: "+91 9353919178",
-                            email = initialProfile?.email ?: "student@bookbuddys.in",
+                            phone = currentAuthUser?.phone ?: initialProfile?.phone ?: "+91 9353919178",
+                            email = currentAuthUser?.email ?: initialProfile?.email ?: "student@bookbuddys.in",
                             studentName = studentName.trim(),
                             studentGrade = selectedGrade,
                             schoolName = schoolName.trim().ifBlank { "BookBuddys Partner School" },
                             isParentMode = isParentMode
-                        )).copy(
+                        )
+
+                        val updated = base.copy(
+                            id = persistentId,
                             name = studentName.trim(),
                             studentName = studentName.trim(),
                             studentGrade = selectedGrade,
@@ -388,6 +396,7 @@ fun StudentSetupScreen(
                             isParentMode = isParentMode
                         )
                         authRepository.updateProfile(updated)
+                        com.kidsg.core.storage.SessionStorage.setOnboardingCompleted(true)
                         onSetupComplete()
                     }
                 },

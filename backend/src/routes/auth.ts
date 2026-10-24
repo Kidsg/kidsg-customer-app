@@ -342,70 +342,118 @@ router.post('/auth/verify-otp', rateLimit(20, 60000, 'auth_verify_otp'), async (
   }
 
   const emailClean = (email || '').trim().toLowerCase();
+  const phoneClean = (phone || (!contact.includes('@') ? contact : '')).trim();
 
-  // 1. Authoritative check in local DB
-  const localExisting = emailClean ? db.checkEmailExists(emailClean) : null;
-  if (localExisting?.exists && localExisting.user) {
-    const token = `kidsg-jwt-${localExisting.user.id}`;
+  // 1. Authoritative check in local DB (by email or phone)
+  const localExisting = emailClean ? db.checkEmailExists(emailClean)?.user : db.findUserByContact(contact);
+  if (localExisting?.id) {
+    const token = `kidsg-jwt-${localExisting.id}`;
     sendSuccess(res, {
       verified: true,
       isNewUser: false,
       token,
-      user: localExisting.user,
-      profile: localExisting.user,
+      user: localExisting,
+      profile: localExisting,
     }, 'OTP verified successfully');
     return;
   }
 
   // 2. Authoritative check against Supabase profiles table
-  if (emailClean) {
-    try {
-      const { data: supaProf } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .eq('email', emailClean)
-        .maybeSingle();
-
-      if (supaProf?.id) {
-        const userObj = {
-          id: supaProf.id,
-          authUserId: supaProf.auth_user_id || supaProf.id,
-          email: supaProf.email,
-          firstName: supaProf.first_name || 'Student',
-          lastName: supaProf.last_name || '',
-          phone: supaProf.phone || phone || '',
-          role: supaProf.role || 'CUSTOMER',
-          onboardingCompleted: supaProf.onboarding_completed ?? true,
-          selectedClass: supaProf.selected_class || 'Class 1',
-          selectedSchool: supaProf.selected_school || 'KidsG Partner School',
-          createdAt: supaProf.created_at || new Date().toISOString(),
-          updatedAt: supaProf.updated_at || new Date().toISOString(),
-        };
-
-        db.updateProfile(supaProf.id, userObj as any);
-
-        const token = `kidsg-jwt-${supaProf.id}`;
-        sendSuccess(res, {
-          verified: true,
-          isNewUser: false,
-          token,
-          user: userObj,
-          profile: userObj,
-        }, 'OTP verified successfully');
-        return;
-      }
-    } catch (e: any) {
-      console.warn('[KidsG][Supabase] Profile lookup during verify-otp notice:', e?.message);
+  try {
+    let query = supabaseAdmin.from('profiles').select('*');
+    if (emailClean && phoneClean) {
+      query = query.or(`email.eq.${emailClean},phone.eq.${phoneClean}`);
+    } else if (emailClean) {
+      query = query.eq('email', emailClean);
+    } else if (phoneClean) {
+      query = query.eq('phone', phoneClean);
     }
+
+    const { data: supaProf } = await query.maybeSingle();
+
+    if (supaProf?.id) {
+      const userObj = {
+        id: supaProf.id,
+        authUserId: supaProf.auth_user_id || supaProf.id,
+        email: supaProf.email,
+        firstName: supaProf.first_name || 'Student',
+        lastName: supaProf.last_name || '',
+        phone: supaProf.phone || phoneClean || '',
+        role: supaProf.role || 'CUSTOMER',
+        onboardingCompleted: supaProf.onboarding_completed ?? true,
+        selectedClass: supaProf.selected_class || 'Class 1',
+        selectedSchool: supaProf.selected_school || 'KidsG Partner School',
+        createdAt: supaProf.created_at || new Date().toISOString(),
+        updatedAt: supaProf.updated_at || new Date().toISOString(),
+      };
+
+      db.updateProfile(supaProf.id, userObj as any);
+
+      const token = `kidsg-jwt-${supaProf.id}`;
+      sendSuccess(res, {
+        verified: true,
+        isNewUser: false,
+        token,
+        user: userObj,
+        profile: userObj,
+      }, 'OTP verified successfully');
+      return;
+    }
+  } catch (e: any) {
+    console.warn('[KidsG][Supabase] Profile lookup during verify-otp notice:', e?.message);
   }
 
-  // New user verified code
+  // 3. Brand New User: immediately create authoritative user record and session token
+  const userId = `user_${randomUUID().substring(0, 10)}`;
+  const userEmail = emailClean || (contact.includes('@') ? contact : `${contact.replace(/\D/g, '')}@kidsg.in`);
+  const userPhone = phoneClean || (contact.includes('@') ? '' : contact);
+
+  const newUser = {
+    id: userId,
+    authUserId: userId,
+    email: userEmail,
+    phone: userPhone,
+    firstName: 'Student',
+    lastName: '',
+    role: 'CUSTOMER',
+    onboardingCompleted: false,
+    selectedClass: 'Class 7',
+    selectedSchool: 'KidsG Partner School',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  db.updateProfile(userId, newUser);
+
+  try {
+    await supabaseAdmin.from('profiles').upsert({
+      id: userId,
+      auth_user_id: userId,
+      email: newUser.email,
+      phone: newUser.phone,
+      first_name: newUser.firstName,
+      last_name: newUser.lastName,
+      role: 'CUSTOMER',
+      onboarding_completed: false,
+      selected_class: newUser.selectedClass,
+      selected_school: newUser.selectedSchool,
+      created_at: newUser.createdAt,
+      updated_at: newUser.updatedAt,
+    }, { onConflict: 'id' });
+  } catch (e: any) {
+    console.warn('[KidsG][Supabase] Profile register sync warning:', e?.message);
+  }
+
+  const token = `kidsg-jwt-${userId}`;
   sendSuccess(res, {
     verified: true,
     isNewUser: true,
-    email: emailClean,
-    phone: phone || '',
-  }, 'Verification code accepted. Please complete account details.');
+    token,
+    user: newUser,
+    profile: newUser,
+    email: userEmail,
+    phone: userPhone,
+  }, 'Verification code accepted. Session created.');
 });
 
 // POST /api/auth/logout

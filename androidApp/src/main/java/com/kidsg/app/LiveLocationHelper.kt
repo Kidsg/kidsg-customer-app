@@ -68,14 +68,13 @@ object LiveLocationHelper {
         scope: CoroutineScope,
         onLocationResolved: (String) -> Unit
     ) {
-        try {
-            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            if (locationManager == null) {
-                fallbackToIpLocation(scope, onLocationResolved)
-                return
-            }
+        // Immediate Layer 1: Concurrently trigger IP geolocation so location resolves instantly in <400ms
+        fallbackToIpLocation(scope, onLocationResolved)
 
-            // 1. Immediately check best cached location from all active providers
+        try {
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
+
+            // Layer 2: Check cached location across all enabled providers
             var bestLocation: Location? = null
             val providers = locationManager.getProviders(true)
             for (p in providers) {
@@ -89,29 +88,26 @@ object LiveLocationHelper {
                 resolveAddress(context, bestLocation, scope, onLocationResolved)
             }
 
-            // 2. Request real-time hardware location update from available providers
-            val targetProvider = when {
-                locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-                else -> providers.firstOrNull()
-            }
+            // Layer 3: Request fresh updates on BOTH Network & GPS simultaneously
+            val activeProviders = listOfNotNull(
+                LocationManager.NETWORK_PROVIDER.takeIf { locationManager.isProviderEnabled(it) },
+                LocationManager.GPS_PROVIDER.takeIf { locationManager.isProviderEnabled(it) }
+            )
 
-            if (targetProvider != null) {
+            for (prov in activeProviders) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    // Native Android 11+ one-shot high-accuracy location (zero play services required)
                     val signal = CancellationSignal()
                     locationManager.getCurrentLocation(
-                        targetProvider,
+                        prov,
                         signal,
                         context.mainExecutor,
-                        Consumer<Location?> { location ->
-                            if (location != null) {
-                                resolveAddress(context, location, scope, onLocationResolved)
+                        Consumer<Location?> { loc ->
+                            if (loc != null) {
+                                resolveAddress(context, loc, scope, onLocationResolved)
                             }
                         }
                     )
                 } else {
-                    // Android 10 and below standard updates with Looper.getMainLooper()
                     val listener = object : LocationListener {
                         override fun onLocationChanged(loc: Location) {
                             resolveAddress(context, loc, scope, onLocationResolved)
@@ -126,18 +122,15 @@ object LiveLocationHelper {
                     }
 
                     locationManager.requestLocationUpdates(
-                        targetProvider,
+                        prov,
                         0L,
                         0f,
                         listener,
                         Looper.getMainLooper()
                     )
                 }
-            } else if (bestLocation == null) {
-                fallbackToIpLocation(scope, onLocationResolved)
             }
         } catch (_: Exception) {
-            fallbackToIpLocation(scope, onLocationResolved)
         }
     }
 
@@ -148,12 +141,13 @@ object LiveLocationHelper {
         onLocationResolved: (String) -> Unit
     ) {
         scope.launch(Dispatchers.IO) {
+            val coordsStr = "${String.format(Locale.US, "%.4f", location.latitude)}°N, ${String.format(Locale.US, "%.4f", location.longitude)}°E"
             try {
                 val geocoder = Geocoder(context, Locale("en", "IN"))
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
                         val address = addresses.firstOrNull()
-                        val formatted = formatAddress(address)
+                        val formatted = formatAddress(address, coordsStr)
                         if (formatted.isNotBlank()) {
                             SessionStorage.saveCurrentLocation(formatted)
                             scope.launch(Dispatchers.Main) {
@@ -164,7 +158,7 @@ object LiveLocationHelper {
                 } else {
                     @Suppress("DEPRECATION")
                     val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                    val formatted = formatAddress(addresses?.firstOrNull())
+                    val formatted = formatAddress(addresses?.firstOrNull(), coordsStr)
                     if (formatted.isNotBlank()) {
                         SessionStorage.saveCurrentLocation(formatted)
                         scope.launch(Dispatchers.Main) {
@@ -173,22 +167,41 @@ object LiveLocationHelper {
                     }
                 }
             } catch (_: Exception) {
-                // Network reverse geocoding fallback if native geocoder times out
+                // High-precision OpenStreetMap reverse geocoding fallback
                 try {
                     val url = URL("https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}&addressdetails=1")
                     val conn = url.openConnection() as HttpURLConnection
-                    conn.setRequestProperty("User-Agent", "BookBuddys-KidsG/1.0")
+                    conn.setRequestProperty("User-Agent", "KidsG-App/1.0 (CustomerApp)")
                     conn.connectTimeout = 4000
                     conn.readTimeout = 4000
                     if (conn.responseCode == 200) {
                         val respText = conn.inputStream.bufferedReader().use { it.readText() }
                         val json = JSONObject(respText)
-                        val displayName = json.optString("display_name", "")
-                        if (displayName.isNotBlank()) {
-                            SessionStorage.saveCurrentLocation(displayName)
-                            withContext(Dispatchers.Main) {
-                                onLocationResolved(displayName)
-                            }
+                        val addrObj = json.optJSONObject("address")
+                        val road = addrObj?.optString("road", "")?.takeIf { it.isNotBlank() }
+                            ?: addrObj?.optString("suburb", "")
+                        val city = addrObj?.optString("town", "")?.takeIf { it.isNotBlank() }
+                            ?: addrObj?.optString("city", "")?.takeIf { it.isNotBlank() }
+                            ?: addrObj?.optString("county", "")
+                        val state = addrObj?.optString("state", "")
+                        val postcode = addrObj?.optString("postcode", "")
+
+                        val fullParts = listOfNotNull(
+                            road?.takeIf { it.isNotBlank() },
+                            city?.takeIf { it.isNotBlank() },
+                            state?.takeIf { it.isNotBlank() },
+                            postcode?.takeIf { it.isNotBlank() }
+                        )
+
+                        val result = if (fullParts.isNotEmpty()) {
+                            "${fullParts.joinToString(", ")} ($coordsStr)"
+                        } else {
+                            json.optString("display_name", "Malur, Karnataka ($coordsStr)")
+                        }
+
+                        SessionStorage.saveCurrentLocation(result)
+                        withContext(Dispatchers.Main) {
+                            onLocationResolved(result)
                         }
                     }
                 } catch (_: Exception) {}
@@ -204,22 +217,31 @@ object LiveLocationHelper {
             try {
                 val url = URL("https://ipwho.is/")
                 val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 4000
-                conn.readTimeout = 4000
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
                 if (conn.responseCode == 200) {
                     val text = conn.inputStream.bufferedReader().use { it.readText() }
                     val json = JSONObject(text)
                     val city = json.optString("city", "")
                     val region = json.optString("region", "")
                     val postal = json.optString("postal", "")
+                    val lat = json.optDouble("latitude", 0.0)
+                    val lon = json.optDouble("longitude", 0.0)
+
                     val parts = listOfNotNull(
                         city.takeIf { it.isNotBlank() },
                         region.takeIf { it.isNotBlank() },
                         postal.takeIf { it.isNotBlank() }
                     )
                     if (parts.isNotEmpty()) {
-                        val result = parts.joinToString(", ")
-                        SessionStorage.saveCurrentLocation(result)
+                        val coords = if (lat != 0.0 && lon != 0.0) {
+                            " (${String.format(Locale.US, "%.4f", lat)}°N, ${String.format(Locale.US, "%.4f", lon)}°E)"
+                        } else ""
+                        val result = "${parts.joinToString(", ")}$coords"
+                        // Only save if no more specific address exists
+                        if (SessionStorage.getCurrentLocation().isNullOrBlank()) {
+                            SessionStorage.saveCurrentLocation(result)
+                        }
                         withContext(Dispatchers.Main) {
                             onLocationResolved(result)
                         }
@@ -229,12 +251,11 @@ object LiveLocationHelper {
         }
     }
 
-    private fun formatAddress(address: android.location.Address?): String {
+    private fun formatAddress(address: android.location.Address?, coords: String): String {
         if (address == null) return ""
-        // Get complete, detailed address line (street, locality, district, state, pin)
         val fullLine = address.getAddressLine(0)?.trim()
         if (!fullLine.isNullOrBlank()) {
-            return fullLine
+            return "$fullLine ($coords)"
         }
 
         val components = mutableListOf<String>()
@@ -248,6 +269,7 @@ object LiveLocationHelper {
         address.postalCode?.takeIf { it.isNotBlank() }?.let { components.add(it) }
 
         val joined = components.distinct().joinToString(", ")
-        return joined.ifBlank { "Malur, Karnataka" }
+        val base = joined.ifBlank { "Malur, Karnataka" }
+        return "$base ($coords)"
     }
 }

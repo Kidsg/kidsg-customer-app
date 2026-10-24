@@ -2201,6 +2201,80 @@ export class KidsGDatabase {
     return updated;
   }
 
+  findUserByContact(contact: string): any {
+    const cleaned = contact.trim().toLowerCase();
+    const digits = cleaned.replace(/\D/g, '');
+
+    // 1. Check credentials by email
+    const cred = this.userCredentials.get(cleaned);
+    if (cred) {
+      return this.userProfiles.get(cred.userId);
+    }
+
+    // 2. Check profiles by email or phone digits
+    for (const p of this.userProfiles.values()) {
+      if (p.email && p.email.trim().toLowerCase() === cleaned) {
+        return p;
+      }
+      if (p.phone) {
+        const phoneDigits = p.phone.replace(/\D/g, '');
+        if (phoneDigits && digits && (phoneDigits === digits || phoneDigits.endsWith(digits) || digits.endsWith(phoneDigits))) {
+          return p;
+        }
+      }
+    }
+    return null;
+  }
+
+  resetUserData(preserveEmails: string[] = ['veenithkumars31@gmail.com', 'founder@kidsg.in']): {
+    clearedOrders: number;
+    clearedProfiles: number;
+    clearedCarts: number;
+  } {
+    const keepUserIds = new Set<string>();
+    const normalizedPreserve = preserveEmails.map(e => e.trim().toLowerCase());
+
+    for (const [email, cred] of this.userCredentials.entries()) {
+      if (normalizedPreserve.includes(email.toLowerCase())) {
+        keepUserIds.add(cred.userId);
+      }
+    }
+
+    for (const [userId, profile] of this.userProfiles.entries()) {
+      if (profile.email && normalizedPreserve.includes(profile.email.toLowerCase())) {
+        keepUserIds.add(userId);
+      }
+    }
+
+    const clearedOrders = this.orders.size;
+    this.orders.clear();
+    this.orderStatusHistory.clear();
+    this.payments.clear();
+    this.paymentSubmissions.clear();
+    this.deliveryBookings.clear();
+
+    const clearedCarts = this.carts.size;
+    this.carts.clear();
+    this.addresses.clear();
+    this.wishlists.clear();
+
+    let clearedProfiles = 0;
+    for (const [userId, profile] of this.userProfiles.entries()) {
+      if (!keepUserIds.has(userId)) {
+        this.userProfiles.delete(userId);
+        clearedProfiles++;
+      }
+    }
+
+    for (const [email, cred] of this.userCredentials.entries()) {
+      if (!keepUserIds.has(cred.userId) && !normalizedPreserve.includes(email.toLowerCase())) {
+        this.userCredentials.delete(email);
+      }
+    }
+
+    return { clearedOrders, clearedProfiles, clearedCarts };
+  }
+
   // --- Support Tickets ---
   createSupportTicket(userId: string, subject: string, message: string, orderId?: string): SupportTicket {
     const ticket: SupportTicket = {

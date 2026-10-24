@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class ProductionAuthRepository(
-    private val authApi: AuthApi = AuthApi()
+    private val authApi: AuthApi = AuthApi(),
+    private val profileApi: com.kidsg.data.remote.api.ProfileApi = com.kidsg.data.remote.api.ProfileApi()
 ) : AuthRepository {
 
     private val _currentUser: MutableStateFlow<UserProfile?>
@@ -52,6 +53,7 @@ class ProductionAuthRepository(
                 )
                 _currentUser.value = profile
                 SessionStorage.saveUserProfile(profile)
+                SessionStorage.setOnboardingCompleted(true)
                 Result.success(profile)
             }
             is ApiResult.Error -> {
@@ -125,17 +127,22 @@ class ProductionAuthRepository(
                 SessionStorage.saveAuthToken(res.data.token)
                 val u = res.data.user
                 val p = res.data.profile
+                val isExisting = !res.data.isNewUser
+                val defaultStudent = if (isExisting) (u?.firstName ?: p?.firstName ?: "Student") else ""
                 val profile = UserProfile(
                     id = u?.id ?: p?.id ?: "user_id",
                     name = "${u?.firstName ?: p?.firstName ?: "Student"} ${u?.lastName ?: p?.lastName ?: ""}".trim(),
                     phone = u?.phone ?: if (!phoneNumber.contains("@")) phoneNumber else "",
                     email = u?.email ?: if (phoneNumber.contains("@")) phoneNumber else "$phoneNumber@kidsg.in",
-                    studentName = u?.firstName ?: p?.firstName ?: "",
-                    studentGrade = p?.selectedClass ?: "Class 1",
+                    studentName = u?.firstName ?: p?.firstName ?: defaultStudent,
+                    studentGrade = p?.selectedClass ?: "Class 7",
                     schoolName = p?.selectedSchool ?: "KidsG Partner School"
                 )
                 _currentUser.value = profile
                 SessionStorage.saveUserProfile(profile)
+                if (isExisting) {
+                    SessionStorage.setOnboardingCompleted(true)
+                }
                 Result.success(profile)
             }
             is ApiResult.Error -> {
@@ -147,6 +154,19 @@ class ProductionAuthRepository(
     override suspend fun updateProfile(profile: UserProfile): Result<UserProfile> {
         _currentUser.value = profile
         SessionStorage.saveUserProfile(profile)
+        try {
+            val parts = profile.name.trim().split(" ", limit = 2)
+            val firstName = profile.studentName.ifBlank { parts.getOrNull(0) ?: "Student" }
+            val lastName = parts.getOrNull(1) ?: ""
+            profileApi.updateProfile(
+                com.kidsg.data.remote.dto.UpdateProfileRequestDto(
+                    firstName = firstName,
+                    lastName = lastName,
+                    selectedClass = profile.studentGrade,
+                    selectedSchool = profile.schoolName
+                )
+            )
+        } catch (_: Exception) {}
         return Result.success(profile)
     }
 
