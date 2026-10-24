@@ -36,7 +36,7 @@ router.post('/orders', optionalAuth(), async (req: Request, res: Response) => {
   }
 
   const { addressId, paymentMethod, couponCode, notes, items, deliveryAddress } = result.data;
-  const userId = req.user?.id || 'user_dev_default';
+  const userId = req.user?.id || (req.headers['x-user-id'] ? String(req.headers['x-user-id']).trim() : 'user_dev_default');
   const orderRes = db.createOrder(
     userId,
     addressId || 'addr_default',

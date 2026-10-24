@@ -34,13 +34,16 @@ class ProductionCartRepository(
     )
     override val cartState: StateFlow<Cart> = _cartState.asStateFlow()
 
+    private fun hasSession(): Boolean =
+        !(ApiConfig.authToken ?: SessionStorage.getAuthToken()).isNullOrBlank()
+
     suspend fun refreshCart() {
         val localItems = _cartState.value.items.ifEmpty { SessionStorage.getSavedCartItems() }
         if (localItems.isNotEmpty()) {
             _cartState.update { it.copy(items = localItems) }
             SessionStorage.saveCartItems(localItems)
             // Push items to server in background
-            if (!ApiConfig.authToken.isNullOrBlank()) {
+            if (hasSession()) {
                 for (item in localItems) {
                     try {
                         cartApi.addToCart(item.product.id, item.quantity, item.selectedVariant)
@@ -52,7 +55,7 @@ class ProductionCartRepository(
         }
 
         // Only if local was truly empty, attempt to fetch from server
-        if (!ApiConfig.authToken.isNullOrBlank()) {
+        if (hasSession()) {
             when (val res = cartApi.getCart()) {
                 is ApiResult.Success -> {
                     val serverItems = res.data.items.map { it.toDomain() }
@@ -85,7 +88,7 @@ class ProductionCartRepository(
         }
 
         // Sync with backend without replacing local multi-item cart with partial server responses
-        if (!ApiConfig.authToken.isNullOrBlank()) {
+        if (hasSession()) {
             try {
                 cartApi.addToCart(product.id, quantity, variant)
             } catch (_: Exception) {
@@ -99,7 +102,7 @@ class ProductionCartRepository(
             SessionStorage.saveCartItems(updated)
             current.copy(items = updated)
         }
-        if (!ApiConfig.authToken.isNullOrBlank()) {
+        if (hasSession()) {
             try {
                 cartApi.removeFromCart(productId)
             } catch (_: Exception) {
@@ -120,7 +123,7 @@ class ProductionCartRepository(
             SessionStorage.saveCartItems(updated)
             current.copy(items = updated)
         }
-        if (!ApiConfig.authToken.isNullOrBlank()) {
+        if (hasSession()) {
             try {
                 cartApi.updateCartItem(productId, quantity)
             } catch (_: Exception) {
@@ -156,7 +159,7 @@ class ProductionCartRepository(
     override suspend fun clearCart() {
         SessionStorage.saveCartItems(emptyList())
         _cartState.update { it.copy(items = emptyList(), appliedCoupon = null) }
-        if (!ApiConfig.authToken.isNullOrBlank()) {
+        if (hasSession()) {
             try {
                 cartApi.clearCart()
             } catch (_: Exception) {

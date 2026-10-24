@@ -1,6 +1,7 @@
 package com.kidsg.core.network
 
 import com.kidsg.core.config.ApiConfig
+import com.kidsg.core.storage.SessionStorage
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -50,8 +51,13 @@ object ApiClient {
 
             defaultRequest {
                 contentType(ContentType.Application.Json)
-                ApiConfig.authToken?.let { token ->
+                val token = ApiConfig.authToken ?: SessionStorage.getAuthToken()
+                if (!token.isNullOrBlank()) {
                     header(HttpHeaders.Authorization, "Bearer $token")
+                }
+                val userId = SessionStorage.getUserProfile()?.id
+                if (!userId.isNullOrBlank()) {
+                    header("X-User-Id", userId)
                 }
             }
         }

@@ -8,6 +8,10 @@ const router = Router();
 
 function getEffectiveUserId(req: Request): string {
   if (req.user?.id) return req.user.id;
+  const userHeader = req.headers['x-user-id'] as string | undefined;
+  if (userHeader && typeof userHeader === 'string' && userHeader.trim().length > 0) {
+    return userHeader.trim();
+  }
   const guestHeader = (req.headers['x-guest-id'] || req.headers['x-session-id']) as string | undefined;
   if (guestHeader && typeof guestHeader === 'string' && guestHeader.trim().length > 0) {
     return `guest_${guestHeader.trim()}`;

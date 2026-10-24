@@ -5,11 +5,13 @@ import com.kidsg.core.network.ApiClient
 import com.kidsg.core.network.ApiException
 import com.kidsg.core.network.ApiResult
 import com.kidsg.core.network.Endpoints
+import com.kidsg.core.storage.SessionStorage
 import com.kidsg.data.remote.dto.*
 import io.ktor.client.call.body
 import io.ktor.client.request.*
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -27,6 +29,14 @@ suspend inline fun <reified T, reified B : Any> safeApiCallWithBody(
         val response: HttpResponse = client.request(url) {
             this.method = method
             contentType(ContentType.Application.Json)
+            val token = ApiConfig.authToken ?: SessionStorage.getAuthToken()
+            if (!token.isNullOrBlank()) {
+                header(HttpHeaders.Authorization, "Bearer $token")
+            }
+            val userId = SessionStorage.getUserProfile()?.id
+            if (!userId.isNullOrBlank()) {
+                header("X-User-Id", userId)
+            }
             params?.forEach { (k, v) -> parameter(k, v) }
             setBody(bodyData)
         }
@@ -72,6 +82,14 @@ suspend inline fun <reified T> safeApiCall(
 
         val response: HttpResponse = client.request(url) {
             this.method = method
+            val token = ApiConfig.authToken ?: SessionStorage.getAuthToken()
+            if (!token.isNullOrBlank()) {
+                header(HttpHeaders.Authorization, "Bearer $token")
+            }
+            val userId = SessionStorage.getUserProfile()?.id
+            if (!userId.isNullOrBlank()) {
+                header("X-User-Id", userId)
+            }
             params?.forEach { (k, v) -> parameter(k, v) }
         }
 

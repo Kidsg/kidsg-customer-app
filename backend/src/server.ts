@@ -35,11 +35,11 @@ const app = express();
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'X-Guest-Id', 'X-Session-Id', 'X-Request-Id'],
 }));
 app.use(express.json());
 
-// Request ID and Observability Logging Middleware
+// Request ID and Observability Logging Middleware with User ID Tracking
 app.use((req: Request, res: Response, next: NextFunction) => {
   const requestId = req.headers['x-request-id'] as string || `req_${randomUUID().substring(0, 8)}`;
   req.headers['x-request-id'] = requestId;
@@ -48,13 +48,14 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
   res.on('finish', () => {
     const durationMs = Date.now() - start;
-    Logger.info('HTTP Request', {
+    const effectiveUserId = req.user?.id || (req.headers['x-user-id'] as string) || (req.headers['x-guest-id'] as string) || 'guest';
+    Logger.info(`[HTTP] [User: ${effectiveUserId}] ${req.method} ${req.originalUrl} - ${res.statusCode} (${durationMs}ms)`, {
       requestId,
       method: req.method,
       endpoint: req.originalUrl,
       status: res.statusCode,
       durationMs,
-      userId: req.user?.id,
+      userId: effectiveUserId,
     });
   });
 
