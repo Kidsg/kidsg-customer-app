@@ -359,18 +359,25 @@ router.post('/auth/verify-otp', rateLimit(20, 60000, 'auth_verify_otp'), async (
     return;
   }
 
-  // 2. Authoritative check against Supabase profiles table
+  // 2. Authoritative check against Supabase profiles table with strict timeout
   try {
-    let query = supabaseAdmin.from('profiles').select('*');
-    if (emailClean && phoneClean) {
-      query = query.or(`email.eq.${emailClean},phone.eq.${phoneClean}`);
-    } else if (emailClean) {
-      query = query.eq('email', emailClean);
-    } else if (phoneClean) {
-      query = query.eq('phone', phoneClean);
-    }
+    const supaPromise = (async () => {
+      let query = supabaseAdmin.from('profiles').select('*');
+      if (emailClean && phoneClean) {
+        query = query.or(`email.eq.${emailClean},phone.eq.${phoneClean}`);
+      } else if (emailClean) {
+        query = query.eq('email', emailClean);
+      } else if (phoneClean) {
+        query = query.eq('phone', phoneClean);
+      }
+      return await query.maybeSingle();
+    })();
 
-    const { data: supaProf } = await query.maybeSingle();
+    const timeoutPromise = new Promise<{ data: null }>((resolve) =>
+      setTimeout(() => resolve({ data: null }), 1000)
+    );
+
+    const { data: supaProf } = await Promise.race([supaPromise, timeoutPromise]);
 
     if (supaProf?.id) {
       const userObj = {
@@ -426,24 +433,25 @@ router.post('/auth/verify-otp', rateLimit(20, 60000, 'auth_verify_otp'), async (
 
   db.updateProfile(userId, newUser);
 
-  try {
-    await supabaseAdmin.from('profiles').upsert({
-      id: userId,
-      auth_user_id: userId,
-      email: newUser.email,
-      phone: newUser.phone,
-      first_name: newUser.firstName,
-      last_name: newUser.lastName,
-      role: 'CUSTOMER',
-      onboarding_completed: false,
-      selected_class: newUser.selectedClass,
-      selected_school: newUser.selectedSchool,
-      created_at: newUser.createdAt,
-      updated_at: newUser.updatedAt,
-    }, { onConflict: 'id' });
-  } catch (e: any) {
+  // Background non-blocking sync to Supabase (never block or slow down HTTP response)
+  supabaseAdmin.from('profiles').upsert({
+    id: userId,
+    auth_user_id: userId,
+    email: newUser.email,
+    phone: newUser.phone,
+    first_name: newUser.firstName,
+    last_name: newUser.lastName,
+    role: 'CUSTOMER',
+    onboarding_completed: false,
+    selected_class: newUser.selectedClass,
+    selected_school: newUser.selectedSchool,
+    created_at: newUser.createdAt,
+    updated_at: newUser.updatedAt,
+  }, { onConflict: 'id' }).then(() => {
+    console.log('[KidsG][Supabase] Background profile register synced for', userId);
+  }).catch((e: any) => {
     console.warn('[KidsG][Supabase] Profile register sync warning:', e?.message);
-  }
+  });
 
   const token = `kidsg-jwt-${userId}`;
   sendSuccess(res, {

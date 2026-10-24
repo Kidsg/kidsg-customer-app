@@ -137,7 +137,7 @@ import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
 var supabaseClient;
 var supabaseAuthClient;
-var isConfigured = env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co");
+var isConfigured = Boolean(env.SUPABASE_URL) && env.SUPABASE_URL.startsWith("http") && !env.SUPABASE_URL.includes("mock.supabase.co") && !env.SUPABASE_URL.includes("ogglmiewsswgkyjajnrg") && Boolean(env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY);
 if (isConfigured) {
   const secretKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
   const publishableKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || secretKey;
@@ -145,12 +145,28 @@ if (isConfigured) {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(3e3)
+        });
+      }
     }
   });
   supabaseAuthClient = createClient(env.SUPABASE_URL, publishableKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(3e3)
+        });
+      }
     }
   });
 } else {
@@ -4076,15 +4092,21 @@ router2.post("/auth/verify-otp", rateLimit(20, 6e4, "auth_verify_otp"), async (r
     return;
   }
   try {
-    let query = supabaseAdmin.from("profiles").select("*");
-    if (emailClean && phoneClean) {
-      query = query.or(`email.eq.${emailClean},phone.eq.${phoneClean}`);
-    } else if (emailClean) {
-      query = query.eq("email", emailClean);
-    } else if (phoneClean) {
-      query = query.eq("phone", phoneClean);
-    }
-    const { data: supaProf } = await query.maybeSingle();
+    const supaPromise = (async () => {
+      let query = supabaseAdmin.from("profiles").select("*");
+      if (emailClean && phoneClean) {
+        query = query.or(`email.eq.${emailClean},phone.eq.${phoneClean}`);
+      } else if (emailClean) {
+        query = query.eq("email", emailClean);
+      } else if (phoneClean) {
+        query = query.eq("phone", phoneClean);
+      }
+      return await query.maybeSingle();
+    })();
+    const timeoutPromise = new Promise(
+      (resolve) => setTimeout(() => resolve({ data: null }), 1e3)
+    );
+    const { data: supaProf } = await Promise.race([supaPromise, timeoutPromise]);
     if (supaProf?.id) {
       const userObj = {
         id: supaProf.id,
@@ -4132,24 +4154,24 @@ router2.post("/auth/verify-otp", rateLimit(20, 6e4, "auth_verify_otp"), async (r
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
   db.updateProfile(userId, newUser);
-  try {
-    await supabaseAdmin.from("profiles").upsert({
-      id: userId,
-      auth_user_id: userId,
-      email: newUser.email,
-      phone: newUser.phone,
-      first_name: newUser.firstName,
-      last_name: newUser.lastName,
-      role: "CUSTOMER",
-      onboarding_completed: false,
-      selected_class: newUser.selectedClass,
-      selected_school: newUser.selectedSchool,
-      created_at: newUser.createdAt,
-      updated_at: newUser.updatedAt
-    }, { onConflict: "id" });
-  } catch (e) {
+  supabaseAdmin.from("profiles").upsert({
+    id: userId,
+    auth_user_id: userId,
+    email: newUser.email,
+    phone: newUser.phone,
+    first_name: newUser.firstName,
+    last_name: newUser.lastName,
+    role: "CUSTOMER",
+    onboarding_completed: false,
+    selected_class: newUser.selectedClass,
+    selected_school: newUser.selectedSchool,
+    created_at: newUser.createdAt,
+    updated_at: newUser.updatedAt
+  }, { onConflict: "id" }).then(() => {
+    console.log("[KidsG][Supabase] Background profile register synced for", userId);
+  }).catch((e) => {
     console.warn("[KidsG][Supabase] Profile register sync warning:", e?.message);
-  }
+  });
   const token = `kidsg-jwt-${userId}`;
   sendSuccess(res, {
     verified: true,

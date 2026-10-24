@@ -4,8 +4,13 @@ import { env } from '../config/env.js';
 let supabaseClient: SupabaseClient;
 let supabaseAuthClient: SupabaseClient;
 
-// Check if valid URL is provided
-const isConfigured = env.SUPABASE_URL.startsWith('http') && !env.SUPABASE_URL.includes('mock.supabase.co');
+// Check if valid URL and keys are provided (ignore mock or non-existent template domains)
+const isConfigured = 
+  Boolean(env.SUPABASE_URL) &&
+  env.SUPABASE_URL.startsWith('http') && 
+  !env.SUPABASE_URL.includes('mock.supabase.co') &&
+  !env.SUPABASE_URL.includes('ogglmiewsswgkyjajnrg') &&
+  Boolean(env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY);
 
 if (isConfigured) {
   const secretKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,12 +21,28 @@ if (isConfigured) {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: {
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(3000),
+        });
+      },
+    },
   });
 
   supabaseAuthClient = createClient(env.SUPABASE_URL, publishableKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    global: {
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(3000),
+        });
+      },
     },
   });
 } else {

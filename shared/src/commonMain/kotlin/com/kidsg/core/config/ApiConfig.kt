@@ -18,6 +18,6 @@ object ApiConfig {
             AppEnvironment.PRODUCTION -> "https://kidsg-customer-app.vercel.app"
         }
 
-    val requestTimeoutMs: Long = 15_000L
-    val connectTimeoutMs: Long = 10_000L
+    val requestTimeoutMs: Long = 30_000L
+    val connectTimeoutMs: Long = 15_000L
 }
