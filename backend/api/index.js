@@ -3567,7 +3567,7 @@ var ProductionOtpService = class {
   }
 };
 function getOtpService() {
-  if (env.OTP_PROVIDER === "memory" || env.OTP_PROVIDER === "mock" || env.OTP_PROVIDER === "supabase") {
+  if (env.OTP_PROVIDER === "memory" || env.OTP_PROVIDER === "mock" || env.OTP_PROVIDER === "supabase" || !env.OTP_API_KEY) {
     return new MockOtpService();
   }
   return new ProductionOtpService();
