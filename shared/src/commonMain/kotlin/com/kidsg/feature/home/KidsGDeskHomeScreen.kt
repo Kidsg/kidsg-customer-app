@@ -417,13 +417,15 @@ fun KidsGDeskHomeScreen(
                         ) {
                             Text(text = "📍", fontSize = 18.sp)
                             Spacer(modifier = Modifier.width(8.dp))
+                            val isBengaluru = currentLocationName.contains("Bengaluru", ignoreCase = true) || currentLocationName.contains("Bangalore", ignoreCase = true)
+                            val areaName = currentLocationName.split(",").firstOrNull()?.trim() ?: "Karnataka"
                             Column {
                                 Text(
-                                    text = "BookBuddys Hyperlocal Bengaluru",
+                                    text = if (isBengaluru) "BookBuddys Hyperlocal Bengaluru" else "BookBuddys Delivery • $areaName",
                                     style = KidsGTypography.TitleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 )
                                 Text(
-                                    text = "Fulfilling from nearest partner hub • 45-90 mins delivery",
+                                    text = if (isBengaluru) "Fulfilling from nearest partner hub • 45-90 mins delivery" else "Express delivery to your student desk • Safe & verified",
                                     style = KidsGTypography.Caption.copy(color = Color(0xFFC2410C), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                 )
                             }

@@ -55,4 +55,5 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }

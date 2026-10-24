@@ -63,12 +63,13 @@ fun KidsGApp(
     val screenStack = remember { mutableStateListOf<Screen>() }
 
     var currentLocation by remember {
-        mutableStateOf(initialLocation ?: SessionStorage.getCurrentLocation() ?: "HSR Layout, Bengaluru")
+        mutableStateOf(initialLocation ?: SessionStorage.getCurrentLocation() ?: "Malur, Karnataka")
     }
 
     androidx.compose.runtime.LaunchedEffect(initialLocation) {
         if (!initialLocation.isNullOrBlank()) {
             currentLocation = initialLocation
+            SessionStorage.saveCurrentLocation(initialLocation)
         }
     }
     var showLocationDialog by remember { mutableStateOf(false) }
@@ -520,8 +521,10 @@ fun KidsGApp(
                     LocationSelectionDialog(
                         currentLocation = currentLocation,
                         onDismiss = { showLocationDialog = false },
-                        onLocationSelected = { loc, label ->
-                            currentLocation = "$loc ($label)"
+                        onLocationSelected = { loc, _ ->
+                            val cleanLoc = loc.trim()
+                            currentLocation = cleanLoc
+                            SessionStorage.saveCurrentLocation(cleanLoc)
                         }
                     )
                 }
